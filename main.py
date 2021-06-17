@@ -67,16 +67,17 @@ def log_prior(flux_vars, fobs_max=1400):
             1 < tau_fall < 300:
         return -np.inf
 
-    # Gaussian Prior for Plateau Duration
+    # Gaussian Prior for Plateau Duration (gamma)
     mu1 = 5
     sigma1 = 25
     mu2 = 60
     sigma2 = 900
-    # Gaussian Prior for Scatter
+
+    # Gaussian Prior for Scatter (log f)
     mu3 = 0
     sigma3 = 1
-    return 2 / 3 * np.log(1.0 / (np.sqrt(2 * np.pi) * sigma1)) - 0.5 * (amplitude - mu1) ** 2 / sigma1 ** 2 + \
-        1 / 3 * np.log(1.0 / (np.sqrt(2 * np.pi) * sigma2)) - 0.5 * (amplitude - mu2) ** 2 / sigma2 ** 2 + \
+    return 2 / 3 * np.log(1.0 / (np.sqrt(2 * np.pi) * sigma1)) - 0.5 * (gamma - mu1) ** 2 / sigma1 ** 2 + \
+        1 / 3 * np.log(1.0 / (np.sqrt(2 * np.pi) * sigma2)) - 0.5 * (gamma - mu2) ** 2 / sigma2 ** 2 + \
         np.log(1.0 / (np.sqrt(2 * np.pi) * sigma3)) - 0.5 * (log_f - mu3) ** 2 / sigma3 ** 2
 
 
@@ -85,10 +86,7 @@ def log_probability(flux_vars, x, y, y_err, fobs_max=1400):
     lp = log_prior(flux_vars, fobs_max)
     if not np.isfinite(lp):
         return -np.inf
-    try:
-        return lp + metric_log_likelihood(flux_vars, x, y, y_err)
-    except ValueError:
-        print('Value error here2')
+    return lp + metric_log_likelihood(flux_vars, x, y, y_err)
 
 
 def mcmc(time_limit, points, mu, sigma):
@@ -107,7 +105,7 @@ def mcmc(time_limit, points, mu, sigma):
 
     # Set number of dimensions, walkers, and initial position
     num_dim, num_walkers = 7, 100
-    p0 = [10 ** 3, 0.0001, 80, 20, 5, 5, 0]
+    p0 = [10 ** 3, 0.0001, 80, 20, 5, 5, sigma]
     pos = [p0 + 1e-4 * np.random.randn(num_dim) for i in range(num_walkers)]
 
     # Run MCMC
@@ -139,12 +137,15 @@ def mcmc(time_limit, points, mu, sigma):
     samples = sampler.get_chain(flat=True)
     best = samples[np.argmax(sampler.get_log_prob())]
     print(best)
-    # how to make this better. is this even right?
-    plt.plot(x, flux_equation(x, best[0], best[1], best[2], best[3], best[4], best[5]) + np.random.normal(mu, best[-1],
+
+    # how to make this more concise. what if the scatter is negative??
+    plt.plot(x, flux_equation(x, best[0], best[1], best[2], best[3], best[4], best[5]) + np.random.normal(mu, np.abs(best[-1]),
                                                                                                           points),
              label='Best Fit')
-    plt.plot(x, flux_equation(x, *p0) +
-             np.random.normal(mu, sigma, points), label='Data')
+    # plt.plot(x, flux_equation(x, *p0) +
+    #        np.random.normal(mu, sigma, points), label='Data')
+    plt.plot(x, flux_equation(x, p0[0], p0[1], p0[2], p0[3], p0[4], p0[5]) +
+             np.random.normal(mu, p0[-1], points), label='Data')
     plt.legend()
     plt.show()
 
