@@ -13,7 +13,7 @@ def flux_equation(time, amplitude, beta, gamma, t0, tau_rise, tau_fall):
     :param beta: Plateau Slope (days^-1)
     :param gamma: Plateau Duration (days)
     :param t0: Reference Epoch (days)
-    :param tau_rise: Rise Time (days)
+    :param tau_rise: Rise    Time (days)
     :param tau_fall: Fall Time (days)
     :return: Flux over time
     """
@@ -22,15 +22,15 @@ def flux_equation(time, amplitude, beta, gamma, t0, tau_rise, tau_fall):
             (1 + np.exp(-(time - t0) / tau_rise)))
 
 
-def flux_plot(flux_vars, time_limit, points, mu, sigma):
+def flux_plot(flux_vars, time_limit, points, sigma, mu=0):
     """
     Plot the flux of a transient
 
     :param flux_vars: See flux_equation() parameters
     :param time_limit: Total Time Range (days)
     :param points: Number of Data Points (days)
-    :param mu: Mean of Noise (days)
     :param sigma: Standard Deviation of Noise (days)
+    :param mu: Mean of Noise (days). Default set to 0
     """
     amplitude, beta, gamma, t0, tau_rise, tau_fall = flux_vars
     time = np.linspace(0, time_limit, num=points)
@@ -42,29 +42,29 @@ def flux_plot(flux_vars, time_limit, points, mu, sigma):
     plt.show()
 
 
-def metric_log_likelihood(flux_vars, x, y, y_err):
+def metric_log_likelihood(flux_vars, x, y):
     """
     Computes the log likelihood of a model
 
     :param flux_vars: See flux_equation() parameters
     :param x: Times (days)
     :param y: True Values
-    :param y_err: Y sigmas
     :return: Log Likelihood
     """
-    amplitude, beta, gamma, t0, tau_rise, tau_fall, log_f = flux_vars
-    sigma2 = y_err ** 2 + np.exp(2 * log_f)
+    amplitude, beta, gamma, t0, tau_rise, tau_fall, s_n = flux_vars
     return -0.5 * (
-        np.sum((y - flux_equation(x, amplitude, beta, gamma, t0, tau_rise, tau_fall)) ** 2 / sigma2 ** 2 +
-               np.log(sigma2 ** 2)))
+        np.sum((y - flux_equation(x, amplitude, beta, gamma, t0, tau_rise, tau_fall)) ** 2 / s_n ** 2 +
+               np.log(s_n ** 2)))
 
 
 def log_prior(flux_vars, fobs_max=1400):
+    # TODO: Add docstring
     # TODO: How to set fobs_max properly
-    amplitude, beta, gamma, t0, tau_rise, tau_fall, log_f = flux_vars
+    # TODO: How to set range for s_n?
+    amplitude, beta, gamma, t0, tau_rise, tau_fall, s_n = flux_vars
     # Uniform Priors
-    if not np.log(1) < amplitude < np.log(fobs_max) and 0 < beta < 0.01 and -50 < t0 < 300 and 0.01 < tau_rise < 50 and \
-            1 < tau_fall < 300:
+    if not np.log(1) < amplitude < np.log(fobs_max) and 0 < beta < 0.01 and -50 < t0 < 300 and 0.01 < tau_rise < 50 \
+            and 1 < tau_fall < 300 and 0 < s_n < 100:
         return -np.inf
 
     # Gaussian Prior for Plateau Duration (gamma)
@@ -72,90 +72,84 @@ def log_prior(flux_vars, fobs_max=1400):
     sigma1 = 25
     mu2 = 60
     sigma2 = 900
-
-    # Gaussian Prior for Scatter (log f)
-    mu3 = 0
-    sigma3 = 1
     return 2 / 3 * np.log(1.0 / (np.sqrt(2 * np.pi) * sigma1)) - 0.5 * (gamma - mu1) ** 2 / sigma1 ** 2 + \
-        1 / 3 * np.log(1.0 / (np.sqrt(2 * np.pi) * sigma2)) - 0.5 * (gamma - mu2) ** 2 / sigma2 ** 2 + \
-        np.log(1.0 / (np.sqrt(2 * np.pi) * sigma3)) - 0.5 * (log_f - mu3) ** 2 / sigma3 ** 2
+        1 / 3 * np.log(1.0 / (np.sqrt(2 * np.pi) * sigma2)) - 0.5 * (gamma - mu2) ** 2 / sigma2 ** 2
 
 
-def log_probability(flux_vars, x, y, y_err, fobs_max=1400):
+def log_probability(flux_vars, x, y, fobs_max=1400):
     # Calls Priors
     lp = log_prior(flux_vars, fobs_max)
     if not np.isfinite(lp):
         return -np.inf
-    return lp + metric_log_likelihood(flux_vars, x, y, y_err)
+    return lp + metric_log_likelihood(flux_vars, x, y)
 
 
-def mcmc(time_limit, points, mu, sigma):
+def mcmc(time_limit, points, sigma, mu=0):
     """
     Runs a MCMC and plots example chains, the best fit vs data, and the posterior distribution
 
     :param time_limit: Length of times
     :param points: How often to sample up to the time_limit
-    :param mu: Mean of Noise (days)
     :param sigma: Standard Deviation of Noise (days)
+    :param mu: Mean of Noise (days). Default set to 0
     """
-    # Generate Data
-    x = np.linspace(0, time_limit, num=points)
-    y = flux_equation(x, 10 ** 3, 0.0001, 80, 20, 5, 5) + np.random.normal(mu, sigma, points)
-    y_err = np.zeros(points) + sigma
-
     # Set number of dimensions, walkers, and initial position
-    num_dim, num_walkers = 7, 100
-    p0 = [10 ** 3, 0.0001, 80, 20, 5, 5, sigma]
+    num_dim, num_walkers = 7, 200
+    p0 = [10 ** 3, 0.005, 80, 20, 5, 5, sigma]
     pos = [p0 + 1e-4 * np.random.randn(num_dim) for i in range(num_walkers)]
 
+    # Generate Data
+    x = np.linspace(0, time_limit, num=points)
+    y = flux_equation(x, *p0[:-1]) + np.random.normal(mu, sigma, points)
+
+    # TODO: is y_err used??? remove from likelihood and probability
+    # y_err = np.zeros(points) + sigma
+
     # Run MCMC
-    sampler = emcee.EnsembleSampler(num_walkers, num_dim, log_probability, args=(x, y, y_err))
-    sampler.run_mcmc(pos, 14000)
+    sampler = emcee.EnsembleSampler(num_walkers, num_dim, log_probability, args=(x, y))
+    sampler.run_mcmc(pos, 10000)
 
     # Plot example walks
-    fig1, axes = plt.subplots(3, sharex=True)
-    labels = ["amplitude", "plateau slope", "plateau duration", "reference epoch", "rise time", "fall time", "log(f)"]
+    labels = ["Amplitude", "Plateau Slope", "Plateau Duration", "Reference Epoch", "Rise Time", "Fall Time", "Scatter"]
+    half = int(np.floor(len(labels)/2))
+    second_half = len(labels) - half
+    fig1, axes = plt.subplots(half, sharex=True)
     samples = sampler.get_chain()
-    for i in range(3):
+    for i in range(half):
         ax = axes[i]
         ax.plot(samples[:, :, i], "k", alpha=0.3)
         ax.set_xlim(0, len(samples))
         ax.set_ylabel(labels[i])
 
-    axes[-1].set_xlabel("step number")
-    fig, axes2 = plt.subplots(4, sharex=True)
-    for i in range(4):
+    axes[-1].set_xlabel("Step Number")
+    fig, axes2 = plt.subplots(second_half, sharex=True)
+    for i in range(second_half):
         ax = axes2[i]
-        ax.plot(samples[:, :, i + 3], "k", alpha=0.3)
+        ax.plot(samples[:, :, i + half], "k", alpha=0.3)
         ax.set_xlim(0, len(samples))
-        ax.set_ylabel(labels[i + 3])
+        ax.set_ylabel(labels[i + half])
 
-    axes[-1].set_xlabel("step number")
+    axes[-1].set_xlabel("Step Number")
     plt.show()
 
     # Plot Best Fit to Data
     samples = sampler.get_chain(flat=True)
     best = samples[np.argmax(sampler.get_log_prob())]
-    print(best)
+    print('best', best)
 
-    # how to make this more concise. what if the scatter is negative??
-    plt.plot(x, flux_equation(x, best[0], best[1], best[2], best[3], best[4], best[5]) + np.random.normal(mu, np.abs(best[-1]),
-                                                                                                          points),
-             label='Best Fit')
-    # plt.plot(x, flux_equation(x, *p0) +
-    #        np.random.normal(mu, sigma, points), label='Data')
-    plt.plot(x, flux_equation(x, p0[0], p0[1], p0[2], p0[3], p0[4], p0[5]) +
+    plt.plot(x, flux_equation(x, *best[:-1]), label='Best Fit')
+    plt.plot(x, flux_equation(x, *p0[:-1]) +
              np.random.normal(mu, p0[-1], points), label='Data')
     plt.legend()
     plt.show()
 
     # Remove Burn-In Time
     tau = sampler.get_autocorr_time()
-    print(tau)  # Roughly 190
+    print('tau ', tau)  # Roughly 100
 
     # Corner Plot
     flat_samples = sampler.get_chain(discard=500, thin=15, flat=True)
-    corner.corner(flat_samples, labels=labels)
+    corner.corner(flat_samples, labels=labels, truths=[*p0])
     plt.show()
 
     '''
@@ -177,4 +171,4 @@ def mcmc(time_limit, points, mu, sigma):
 if __name__ == '__main__':
     # Test Run
     # flux_plot([10 ** 3, 0.0001, 175, 20, 5, 5], 250, 250, 100, 10)
-    mcmc(250, 250, 0, 25)
+    mcmc(250, 250, 50)
