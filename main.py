@@ -4,6 +4,21 @@ import emcee
 import corner
 
 
+data = np.genfromtxt('PS1_PS1MD_PSc370330.snana.dat', dtype=None, skip_header=17, skip_footer=1, usecols=(1, 2, 4, 5),
+                     encoding=None)
+xs = np.zeros(74)
+ys = np.zeros(74)
+yerr = np.zeros(74)
+
+j = 0
+for i in range(len(data)):
+    if data[i][1] == 'r':
+        xs[j] = data[i][0]
+        ys[j] = data[i][2]
+        yerr[j] = data[i][3]
+        j += 1
+
+
 def flux_equation(time, amplitude, beta, gamma, t0, tau_rise, tau_fall):
     """
     Equation of Flux for a transient
@@ -17,9 +32,11 @@ def flux_equation(time, amplitude, beta, gamma, t0, tau_rise, tau_fall):
     :param tau_fall: Fall Time (days)
     :return: Flux over time
     """
-    return (amplitude * ((1 - beta * np.minimum(time - t0, gamma)) *
-                         np.exp(-(np.maximum(time - t0, gamma) - gamma) / tau_fall)) /
-            (1 + np.exp(-(time - t0) / tau_rise)))
+    # print('eq', np.exp(-(np.maximum(time - t0, gamma) - gamma) / tau_fall))
+    # print('v', amplitude, beta, gamma, t0, tau_rise, tau_fall)
+    return amplitude * ((1 - beta * np.minimum(time - t0, gamma)) *
+                        np.exp(-(np.maximum(time - t0, gamma) - gamma) / tau_fall)) / \
+        (1 + np.exp(-(time - t0) / tau_rise))
 
 
 def flux_plot(flux_vars, time_limit, points, sigma, mu=0):
@@ -42,7 +59,7 @@ def flux_plot(flux_vars, time_limit, points, sigma, mu=0):
     plt.show()
 
 
-def metric_log_likelihood(flux_vars, x, y):
+def metric_log_likelihood(flux_vars, x, y, yerr):
     """
     Computes the log likelihood of a model
 
@@ -52,18 +69,22 @@ def metric_log_likelihood(flux_vars, x, y):
     :return: Log Likelihood
     """
     amplitude, beta, gamma, t0, tau_rise, tau_fall, s_n = flux_vars
-    return -0.5 * (
-        np.sum((y - flux_equation(x, amplitude, beta, gamma, t0, tau_rise, tau_fall)) ** 2 / s_n ** 2 +
-               np.log(s_n ** 2)))
+    sigma2 = s_n ** 2 + yerr ** 2
+    print('vars', flux_vars)
+    print('eq', flux_equation(x, amplitude, beta, gamma, t0, tau_rise, tau_fall))
+    # print(np.sum((y - flux_equation(x, amplitude, beta, gamma, t0, tau_rise, tau_fall)) ** 2 / sigma2))
+    return -0.5 * (np.sum((y - flux_equation(x, amplitude, beta, gamma, t0, tau_rise, tau_fall)) ** 2 / sigma2 +
+                          np.log(sigma2)))
 
 
-def log_prior(flux_vars, fobs_max=1400):
+def log_prior(flux_vars, fobs_max=np.max(ys)):
     # TODO: Add docstring
-    # TODO: How to set fobs_max properly
+    # TODO: How to set fobs_max properly. np.loadtxt and np max?
     # TODO: How to set range for s_n?
     amplitude, beta, gamma, t0, tau_rise, tau_fall, s_n = flux_vars
     # Uniform Priors
-    if not np.log(1) < amplitude < np.log(fobs_max) and 0 < beta < 0.01 and -50 < t0 < 300 and 0.01 < tau_rise < 50 \
+    # np.log(100 * fobs_max)
+    if not np.log(1) < amplitude < 300 and 0 < beta < 0.01 and xs[np.where(ys == np.max(ys))][0] - 100 < t0 < xs[np.where(ys == np.max(ys))][0] + 300 and 0.01 < tau_rise < 50 \
             and 1 < tau_fall < 300 and 0 < s_n < 100:
         return -np.inf
 
@@ -76,42 +97,34 @@ def log_prior(flux_vars, fobs_max=1400):
         1 / 3 * np.log(1.0 / (np.sqrt(2 * np.pi) * sigma2)) - 0.5 * (gamma - mu2) ** 2 / sigma2 ** 2
 
 
-def log_probability(flux_vars, x, y, fobs_max=1400):
+def log_probability(flux_vars, x, y, yerr, fobs_max=1400):
     # Calls Priors
     lp = log_prior(flux_vars, fobs_max)
     if not np.isfinite(lp):
         return -np.inf
-    return lp + metric_log_likelihood(flux_vars, x, y)
+    print(np.isnan(metric_log_likelihood(flux_vars, x, y, yerr)))
+    #print(np.isnan(lp))
+    return lp + metric_log_likelihood(flux_vars, x, y, yerr)
 
 
-def mcmc(time_limit, points, sigma, mu=0):
-    """
-    Runs a MCMC and plots example chains, the best fit vs data, and the posterior distribution
-
-    :param time_limit: Length of times
-    :param points: How often to sample up to the time_limit
-    :param sigma: Standard Deviation of Noise (days)
-    :param mu: Mean of Noise (days). Default set to 0
-    """
+def mcmc(x, y, yerr, mu=0):
     # Set number of dimensions, walkers, and initial position
-    num_dim, num_walkers = 7, 200
-    p0 = [10 ** 3, 0.005, 80, 20, 5, 5, sigma]
+    num_dim, num_walkers = 7, 100
+    p0 = [200, 0.005, 100, xs[np.where(ys == np.max(ys))][0], 5, 10, 20]
     pos = [p0 + 1e-4 * np.random.randn(num_dim) for i in range(num_walkers)]
 
     # Generate Data
-    x = np.linspace(0, time_limit, num=points)
-    y = flux_equation(x, *p0[:-1]) + np.random.normal(mu, sigma, points)
-
-    # TODO: is y_err used??? remove from likelihood and probability
+    # x = np.linspace(0, time_limit, num=points)
+    # y = flux_equation(x, *p0[:-1]) + np.random.normal(mu, sigma, points)
     # y_err = np.zeros(points) + sigma
 
     # Run MCMC
-    sampler = emcee.EnsembleSampler(num_walkers, num_dim, log_probability, args=(x, y))
+    sampler = emcee.EnsembleSampler(num_walkers, num_dim, log_probability, args=(x, y, yerr))
     sampler.run_mcmc(pos, 10000)
-
+    '''
     # Plot example walks
     labels = ["Amplitude", "Plateau Slope", "Plateau Duration", "Reference Epoch", "Rise Time", "Fall Time", "Scatter"]
-    half = int(np.floor(len(labels)/2))
+    half = int(np.floor(len(labels) / 2))
     second_half = len(labels) - half
     fig1, axes = plt.subplots(half, sharex=True)
     samples = sampler.get_chain()
@@ -131,15 +144,14 @@ def mcmc(time_limit, points, sigma, mu=0):
 
     axes[-1].set_xlabel("Step Number")
     plt.show()
-
+    '''
     # Plot Best Fit to Data
     samples = sampler.get_chain(flat=True)
     best = samples[np.argmax(sampler.get_log_prob())]
     print('best', best)
 
     plt.plot(x, flux_equation(x, *best[:-1]), label='Best Fit')
-    plt.plot(x, flux_equation(x, *p0[:-1]) +
-             np.random.normal(mu, p0[-1], points), label='Data')
+    plt.errorbar(x, y, yerr, ls='none')
     plt.legend()
     plt.show()
 
@@ -149,7 +161,8 @@ def mcmc(time_limit, points, sigma, mu=0):
 
     # Corner Plot
     flat_samples = sampler.get_chain(discard=500, thin=15, flat=True)
-    corner.corner(flat_samples, labels=labels, truths=[*p0])
+    labels = ["Amplitude", "Plateau Slope", "Plateau Duration", "Reference Epoch", "Rise Time", "Fall Time", "Scatter"]
+    corner.corner(flat_samples, labels=labels)
     plt.show()
 
     '''
@@ -159,8 +172,8 @@ def mcmc(time_limit, points, sigma, mu=0):
     plt.ylabel('Amplitude')
     plt.title('A Sample Chain')
     plt.show()
-    
-    
+
+
     # Print 16, 50, 84 Percentiles for Variables
     print("Amplitude", np.percentile(samples[:, 0], [16, 50, 84]))
     print("Plateau Slope", np.percentile(samples[:, 1], [16, 50, 84]))
@@ -168,7 +181,9 @@ def mcmc(time_limit, points, sigma, mu=0):
     '''
 
 
+def fit_red():
+    # try to add more here
+    mcmc(xs, ys, yerr)
+
 if __name__ == '__main__':
-    # Test Run
-    # flux_plot([10 ** 3, 0.0001, 175, 20, 5, 5], 250, 250, 100, 10)
-    mcmc(250, 250, 50)
+    fit_red()
