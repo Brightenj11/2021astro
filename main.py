@@ -40,9 +40,9 @@ def flux_equation(time, amplitude, beta, gamma, t0, tau_rise, tau_fall):
     """
     # print('eq', np.exp(-(np.maximum(time - t0, gamma) - gamma) / tau_fall))
     # print('v', amplitude, beta, gamma, t0, tau_rise, tau_fall)
-    return amplitude * ((1 - beta * np.minimum(time - t0, gamma)) *
+    return np.nan_to_num(amplitude * ((1 - beta * np.minimum(time - t0, gamma)) *
                         np.exp(-(np.maximum(time - t0, gamma) - gamma) / tau_fall)) / \
-           (1 + np.exp(-(time - t0) / tau_rise))
+           (1 + np.exp(-(time - t0) / tau_rise)))
 
 
 def flux_plot(flux_vars, time_limit, points, sigma, mu=0):
