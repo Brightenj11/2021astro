@@ -1,22 +1,28 @@
-import numpy as np
-import matplotlib.pyplot as plt
-import emcee
 import corner
+import emcee
+import matplotlib.pyplot as plt
+import numpy as np
 
 
-data = np.genfromtxt('PS1_PS1MD_PSc370330.snana.dat', dtype=None, skip_header=17, skip_footer=1, usecols=(1, 2, 4, 5),
-                     encoding=None)
-xs = np.zeros(74)
-ys = np.zeros(74)
-yerr = np.zeros(74)
+def read_data(filename: str = 'PS1_PS1MD_PSc370330.snana.dat'):
+    """
+    General function to read .snana.dat files
+    :param filename:
+    :return:
+    """
+    data = np.genfromtxt(filename, dtype=None, skip_header=17, skip_footer=1, usecols=(1, 2, 4, 5),
+                         encoding=None)
 
-j = 0
-for i in range(len(data)):
-    if data[i][1] == 'r':
-        xs[j] = data[i][0]
-        ys[j] = data[i][2]
-        yerr[j] = data[i][3]
-        j += 1
+    xs = list()
+    ys = list()
+    yerr = list()
+
+    for entree in data:
+        if entree[1] == 'r':
+            xs.append(entree[0])
+            ys.append(entree[2])
+            yerr.append(entree[3])
+    return np.array(xs), np.array(ys), np.array(yerr)
 
 
 def flux_equation(time, amplitude, beta, gamma, t0, tau_rise, tau_fall):
@@ -36,7 +42,7 @@ def flux_equation(time, amplitude, beta, gamma, t0, tau_rise, tau_fall):
     # print('v', amplitude, beta, gamma, t0, tau_rise, tau_fall)
     return amplitude * ((1 - beta * np.minimum(time - t0, gamma)) *
                         np.exp(-(np.maximum(time - t0, gamma) - gamma) / tau_fall)) / \
-        (1 + np.exp(-(time - t0) / tau_rise))
+           (1 + np.exp(-(time - t0) / tau_rise))
 
 
 def flux_plot(flux_vars, time_limit, points, sigma, mu=0):
@@ -70,22 +76,28 @@ def metric_log_likelihood(flux_vars, x, y, yerr):
     """
     amplitude, beta, gamma, t0, tau_rise, tau_fall, s_n = flux_vars
     sigma2 = s_n ** 2 + yerr ** 2
-    print('vars', flux_vars)
-    print('eq', flux_equation(x, amplitude, beta, gamma, t0, tau_rise, tau_fall))
+    # print('vars', flux_vars)
+    # print('eq', flux_equation(x, amplitude, beta, gamma, t0, tau_rise, tau_fall))
     # print(np.sum((y - flux_equation(x, amplitude, beta, gamma, t0, tau_rise, tau_fall)) ** 2 / sigma2))
     return -0.5 * (np.sum((y - flux_equation(x, amplitude, beta, gamma, t0, tau_rise, tau_fall)) ** 2 / sigma2 +
                           np.log(sigma2)))
 
 
-def log_prior(flux_vars, fobs_max=np.max(ys)):
+def log_prior(flux_vars, fobs_max):  # , fobs_max=np.max(ys) # bad idea what you did before. global variables; idk what you want
     # TODO: Add docstring
     # TODO: How to set fobs_max properly. np.loadtxt and np max?
     # TODO: How to set range for s_n?
     amplitude, beta, gamma, t0, tau_rise, tau_fall, s_n = flux_vars
     # Uniform Priors
     # np.log(100 * fobs_max)
-    if not np.log(1) < amplitude < 300 and 0 < beta < 0.01 and xs[np.where(ys == np.max(ys))][0] - 100 < t0 < xs[np.where(ys == np.max(ys))][0] + 300 and 0.01 < tau_rise < 50 \
-            and 1 < tau_fall < 300 and 0 < s_n < 100:
+
+    # Check if parameters are valid?
+    if not np.log(1) < amplitude < 300 and \
+            0 < beta < 0.01 and \
+            xs[np.where(ys == np.max(ys))][0] - 100 < t0 < xs[np.where(ys == np.max(ys))][0] + 300 and \
+            0.01 < tau_rise < 50 and\
+            1 < tau_fall < 300 and \
+            0 < s_n < 100:
         return -np.inf
 
     # Gaussian Prior for Plateau Duration (gamma)
@@ -94,7 +106,7 @@ def log_prior(flux_vars, fobs_max=np.max(ys)):
     mu2 = 60
     sigma2 = 900
     return 2 / 3 * np.log(1.0 / (np.sqrt(2 * np.pi) * sigma1)) - 0.5 * (gamma - mu1) ** 2 / sigma1 ** 2 + \
-        1 / 3 * np.log(1.0 / (np.sqrt(2 * np.pi) * sigma2)) - 0.5 * (gamma - mu2) ** 2 / sigma2 ** 2
+           1 / 3 * np.log(1.0 / (np.sqrt(2 * np.pi) * sigma2)) - 0.5 * (gamma - mu2) ** 2 / sigma2 ** 2
 
 
 def log_probability(flux_vars, x, y, yerr, fobs_max=1400):
@@ -102,8 +114,8 @@ def log_probability(flux_vars, x, y, yerr, fobs_max=1400):
     lp = log_prior(flux_vars, fobs_max)
     if not np.isfinite(lp):
         return -np.inf
-    print(np.isnan(metric_log_likelihood(flux_vars, x, y, yerr)))
-    #print(np.isnan(lp))
+    # print(np.isnan(metric_log_likelihood(flux_vars, x, y, yerr)))
+    # print(np.isnan(lp))
     return lp + metric_log_likelihood(flux_vars, x, y, yerr)
 
 
@@ -181,9 +193,10 @@ def mcmc(x, y, yerr, mu=0):
     '''
 
 
-def fit_red():
-    # try to add more here
+def fit_red(xs, ys, yerr):
     mcmc(xs, ys, yerr)
 
+
 if __name__ == '__main__':
-    fit_red()
+    xs, ys, yerr = read_data()
+    fit_red(xs, ys, yerr)
