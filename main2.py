@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from dataclasses import dataclass
 
+
 def read_data(filter_name, filename: str = 'PS1_PS1MD_PSc370330.snana.dat'):
     """
     General function to read .snana.dat files
@@ -44,7 +45,7 @@ def flux_equation(time, amplitude, beta, gamma, t0, tau_rise, tau_fall):
                          (1 + np.exp(-(time - t0) / tau_rise)))
 
 
-def metric_log_likelihood(flux_vars, x, y, yerr):
+def log_likelihood(flux_vars, x, y, yerr):
     """
     Computes the log likelihood of a model
 
@@ -54,15 +55,18 @@ def metric_log_likelihood(flux_vars, x, y, yerr):
     :param yerr: (flux)
     :return: Log Likelihood
     """
-    amplitude, beta, gamma, t0, tau_rise, tau_fall, s_n, \
+    # TODO: get rid of second row (scale stuff)
+    log_amplitude, beta, gamma, t0, tau_rise, tau_fall, s_n, \
         scale_a, scale_b, scale_g, scale_tr, scale_tf, s_ng = flux_vars
 
+    amplitude = 10. ** log_amplitude
     sigma2 = s_n ** 2 + yerr ** 2
     return -0.5 * (np.sum((y - flux_equation(x, amplitude, beta, gamma, t0, tau_rise, tau_fall)) ** 2 / sigma2 +
                           np.log(sigma2)))
 
 
 def log_prior(flux_vars, x, y, yerr, fobs_max):
+    # TODO: get rid of second row
     """Sets Priors for initial flux_vars variables"""
     log_amplitude, beta, gamma, t0, tau_rise, tau_fall, s_n, \
         scale_a, scale_b, scale_g, scale_tr, scale_tf, s_ng = flux_vars
@@ -84,7 +88,8 @@ def log_prior(flux_vars, x, y, yerr, fobs_max):
         1 / 3 * np.log(1.0 / (np.sqrt(2 * np.pi) * sigma2)) - 0.5 * (gamma - mu2) ** 2 / sigma2 ** 2
 
 
-def log_prior_2(flux_vars, yerr):
+def log_prior_scale(flux_vars, yerr):
+    # TODO: Get rid of first row
     """Priors for scaling variables"""
     amplitude, beta, gamma, t0, tau_rise, tau_fall, s_n, \
         scale_a, scale_b, scale_g, scale_tr, scale_tf, s_n2 = flux_vars
@@ -105,57 +110,28 @@ def log_prior_2(flux_vars, yerr):
 
 
 def log_probability(flux_vars, x, y, yerr, x2, y2, yerr2):
+    # TODO: Rename flux_vars to red_vars. rename temp_vars to green_vars
     """Sums log prior and likelihood"""
     fobs_max = np.max(y)  # Maximum observed flux
 
     # Calls Priors
     lp_r = log_prior(flux_vars, x, y, yerr, fobs_max)
-
-    flux_vars[0] = 10 ** flux_vars[0]
-    # print(flux_vars[0])
-    '''
-    # THIS CODE WORKS 
-    # You need to change the flux_vars in the metric_log_likelihood to temp_vars1
-    temp_vars1 = np.copy(flux_vars)
-    temp_vars1[0] = 10 ** flux_vars[0]
-    '''
-
-    lp_g = log_prior_2(flux_vars, yerr)
-
+    lp_g = log_prior_scale(flux_vars, yerr)
     if not np.isfinite(lp_r) and not np.isfinite(lp_g):
         return -np.inf
 
-    ''' 
-    @dataclass
-    class fluxclass:
-        amplitude: float
-        beta: float
-        gamma: float
-        t0: float
-        tau_rise: float
-        tau_fall: float
-        scatter: float
-    fitvariables = fluxclass(*flux_vars[:7])
-
-    @dataclass
-    class scaleclass:
-        amplitude: float
-        beta: float
-        gamma: float
-        tau_rise: float
-        tau_fall: float
-        scatter: float
-    scalevariables = scaleclass(*flux_vars[7:])
-    '''
+    # TODO: Put this into a function?? Add variable names inside
     # Scale variables appropriately
     temp_vars = np.zeros(13)
-    for i in range(3):
+    temp_vars[0] = 10. ** flux_vars[0] * flux_vars[7]
+    for i in range(1, 3):
         temp_vars[i] = flux_vars[i] * flux_vars[7 + i]
     temp_vars[3] = flux_vars[3]
     for k in range(4, 6):
         temp_vars[k] = flux_vars[6 + k]
     temp_vars[6] = flux_vars[-1]
-    return lp_r + lp_g + metric_log_likelihood(flux_vars, x, y, yerr) + metric_log_likelihood(temp_vars, x2, y2, yerr2)
+
+    return lp_r + lp_g + log_likelihood(flux_vars, x, y, yerr) + log_likelihood(temp_vars, x2, y2, yerr2)
 
 
 def mcmc(x, y, yerr, x2, y2, yerr2):
@@ -163,13 +139,13 @@ def mcmc(x, y, yerr, x2, y2, yerr2):
     Runs emcee given x, y, yerr and plots the best fit and flux_vars corner plot given data (x, y, yerr, x2, y2, yerr2)
     """
     # Set number of dimensions, walkers, and initial position
-    num_dim, num_walkers = 13, 150
+    num_dim, num_walkers = 13, 100
     p0 = [np.log10(200), 0.001, 100, x[np.argmax(y)], 5, 10, 20, 1, 1, 1, 1, 1, 10]
     pos = [p0 + 1e-4 * np.random.randn(num_dim) for i in range(num_walkers)]
 
     # Run MCMC
     sampler = emcee.EnsembleSampler(num_walkers, num_dim, log_probability, args=(x, y, yerr, x2, y2, yerr2))
-    sampler.run_mcmc(pos, 5000)
+    sampler.run_mcmc(pos, 7500)
 
     samples = sampler.get_chain(flat=True)
     best = samples[np.argmax(sampler.get_log_prob())]
@@ -181,18 +157,33 @@ def mcmc(x, y, yerr, x2, y2, yerr2):
 
     plt.plot(sampler.get_chain()[:, :, 0], alpha=0.3)
     plt.show()
-    
+    '''
      
     # Model Fits vs Data
-    plt.plot(x, flux_equation(x, best[0], best[1], *real), label='Best Fit Red', color='r')
+    plt.plot(x, flux_equation(x, 10 ** best[0], *best[1:6]), label='Best Fit Red', color='r')
     plt.errorbar(x, y, yerr, ls='none', label='Red Data', color='r')
 
-    plt.plot(x2, flux_equation(x2, best[0] * best[2], best[1] * best[3], *real), label='Best Fit Green', color='g')
+    # Green data
+    green_vars = np.zeros(13)
+    green_vars[0] = 10. ** best[0] * best[7]
+    for i in range(1, 3):
+        green_vars[i] = best[i] * best[7 + i]
+    green_vars[3] = best[3]
+    for k in range(4, 6):
+        green_vars[k] = best[6 + k]
+    green_vars[6] = best[-1]
+
+    plt.plot(x2, flux_equation(x2, *green_vars[:6]), label='Best Fit Green', color='g')
     plt.errorbar(x2, y2, yerr2, ls='none', label='Green Data', color='g')
     plt.xlim([55800, 56400])
     plt.legend()
     plt.show()
-    '''
+
+    plt.plot(x2, flux_equation(x2, *green_vars[:6]), label='Best Fit Green', color='g')
+    plt.errorbar(x2, y2, yerr2, ls='none', label='Green Data', color='g')
+    plt.legend()
+    plt.show()
+
     # Corner
     flat_samples = sampler.get_chain(discard=500, thin=10, flat=True)
     labels = ["Amplitude", "Plateau Slope", "Plateau Duration", "Reference Epoch", "Rise Time", "Fall Time", "Scatter",
