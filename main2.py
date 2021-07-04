@@ -28,8 +28,9 @@ def read_data(filter_name, filename: str = 'PS1_PS1MD_PSc370330.snana.dat'):
 
 def scale_variables(flux_var, filter_from, filter_to):
     """
+    Scale flux_equation variables from one band to another band using flux_var
 
-    :param flux_var: Numpy araray of variables for all bands
+    :param flux_var: Numpy array of variables for all bands
     :param filter_from: band to scale from
     :param filter_to: band to scale to
     :return: size 7 numpy array that holds the scaled variables in the filter_to band
@@ -37,16 +38,22 @@ def scale_variables(flux_var, filter_from, filter_to):
     # Default Values going from filter r to filter g
     base = 0
     to = 7
-
+    # Extra array used when scaling from 'i' band
+    helper_scale = np.ones(5)
+    if filter_from == 'i':
+        helper_scale = flux_var[13:18]
     if filter_to == 'i':
         to = 13
+    if filter_to == 'z':
+        to = 19
 
     # Set Variables
-    amplitude, amplitude_scale = flux_var[base], flux_var[to]
-    beta, gamma, beta_scale, gamma_scale = flux_var[base + 1], flux_var[base + 2], flux_var[to + 1], flux_var[to + 2]
+    amplitude, amplitude_scale = flux_var[base] * helper_scale[0], flux_var[to]
+    beta, gamma, beta_scale, gamma_scale = flux_var[base + 1] * helper_scale[1], flux_var[base + 2] * helper_scale[2], \
+        flux_var[to + 1], flux_var[to + 2]
     t0 = flux_var[3]
-    tau_rise, tau_fall, tau_rise_scale, tau_fall_scale = flux_var[base + 4], flux_var[base + 5], flux_var[to + 3], \
-        flux_var[to + 4]
+    tau_rise, tau_fall, tau_rise_scale, tau_fall_scale = flux_var[base + 4] * helper_scale[3], flux_var[base + 5] * \
+        helper_scale[4], flux_var[to + 3], flux_var[to + 4]
     scatter = flux_var[to + 5]
 
     # Scale Variables
@@ -108,10 +115,10 @@ def log_prior(flux_vars, x, y, yerr, fobs_max):
         return -np.inf
 
     # Gaussian Prior for plateau duration (gamma)
-    mu1 = 5
-    sigma1 = 25
-    mu2 = 60
-    sigma2 = 900
+    mu1 = 5.
+    sigma1 = 25.
+    mu2 = 60.
+    sigma2 = 900.
     return 2 / 3 * np.log(1.0 / (np.sqrt(2 * np.pi) * sigma1)) - 0.5 * (gamma - mu1) ** 2 / sigma1 ** 2 + \
         1 / 3 * np.log(1.0 / (np.sqrt(2 * np.pi) * sigma2)) - 0.5 * (gamma - mu2) ** 2 / sigma2 ** 2
 
@@ -135,88 +142,99 @@ def log_prior_scale(flux_vars, yerr):
         np.log(1.0 / (np.sqrt(2 * np.pi) * sigma1)) - 0.5 * (scale_tf - mu1) ** 2 / sigma1 ** 2
 
 
-def log_probability(flux_vars, x, y, yerr, x2, y2, yerr2, x3, y3, yerr3):
+def log_probability(flux_vars, x, y, yerr, x2, y2, yerr2, x3, y3, yerr3, x4, y4, yerr4):
     """Sums log prior and likelihood"""
     fobs_max = np.max(y)  # Maximum observed flux
 
     # Calls Priors
     lp_r = log_prior(flux_vars[:7], x, y, yerr, fobs_max)
     lp_g = log_prior_scale(flux_vars[7:13], yerr)
-    lp_i = log_prior_scale(flux_vars[13:], yerr)
-    if not (np.isfinite(lp_r) and np.isfinite(lp_g) and np.isfinite(lp_i)):
+    lp_i = log_prior_scale(flux_vars[13:19], yerr)
+    lp_z = log_prior_scale(flux_vars[19:], yerr)
+
+    if not (np.isfinite(lp_r) and np.isfinite(lp_g) and np.isfinite(lp_i) and np.isfinite(lp_z)):
         return -np.inf
 
     # Scale variables
     vars_r = flux_vars[:7]
     vars_g = scale_variables(flux_vars, filter_from='r', filter_to='g')
     vars_i = scale_variables(flux_vars, filter_from='r', filter_to='i')
-    return lp_r + lp_g + lp_i + log_likelihood(vars_r, x, y, yerr) + log_likelihood(vars_g, x2, y2, yerr2) +\
-        log_likelihood(vars_i, x3, y3, yerr3)
+    vars_z = scale_variables(flux_vars, filter_from='i', filter_to='z')
+
+    return lp_r + lp_g + lp_i + lp_z + log_likelihood(vars_r, x, y, yerr) + log_likelihood(vars_g, x2, y2, yerr2) +\
+        log_likelihood(vars_i, x3, y3, yerr3) + log_likelihood(vars_z, x4, y4, yerr4)
 
 
-def mcmc(x, y, yerr, x2, y2, yerr2, x3, y3, yerr3):
+def mcmc(x, y, yerr, x2, y2, yerr2, x3, y3, yerr3, x4, y4, yerr4):
     """
-    Runs emcee given x, y, yerr and plots the best fit and flux_vars corner plot given data (x, y, yerr, x2, y2, yerr2)
+    Runs emcee given x, y, yerr and plots the best fit and flux_vars corner plot given data (x, y, yerr, ...)
     """
     # Set number of dimensions, walkers, and initial position
-    num_dim, num_walkers = 19, 100
-    p0 = [np.log10(200), 0.001, 100, x[np.argmax(y)], 5, 10, 20, 1, 1, 1, 1, 1, 10, 1, 1, 1, 1, 1, 10]
+    num_dim, num_walkers = 25, 100
+    p0 = [np.log10(200), 0.001, 100, x[np.argmax(y)], 5, 10, 20, 1.1, 1.1, 1, 1, 1, 10, 1, 1, 1, 1, 1, 10,
+          1, 1, 1, 1, 1, 10]
     pos = [p0 + 1e-4 * np.random.randn(num_dim) for i in range(num_walkers)]
 
     # Run MCMC
     sampler = emcee.EnsembleSampler(num_walkers, num_dim, log_probability, args=(x, y, yerr, x2, y2, yerr2,
-                                                                                 x3, y3, yerr3))
-    sampler.run_mcmc(pos, 5000)
+                                                                                 x3, y3, yerr3, x4, y4, yerr4))
+    sampler.run_mcmc(pos, 7500)
 
     samples = sampler.get_chain(flat=True)
     best = samples[np.argmax(sampler.get_log_prob())]
     print('best', best)
-    '''
-    # Plot Single Walker
-    plt.plot(sampler.get_chain()[:, 0:, 2][:, 0])
-    plt.show()
 
-    plt.plot(sampler.get_chain()[:, :, 0], alpha=0.3)
-    plt.show()
-    '''
-     
+    # TODO: Make a plotting function
     # Model Fits vs Data
-    plt.plot(x, flux_equation(x, 10 ** best[0], *best[1:6]), label='Best Fit Red', color='r')
-    plt.errorbar(x, y, yerr, ls='none', label='Red Data', color='r')
+    plt.plot(x, flux_equation(x, 10. ** best[0], *best[1:6]), label='Best Fit R', color='r')
+    plt.errorbar(x, y, yerr, ls='none', label='R Data', color='r')
 
     # G band data
     g_vars = scale_variables(best, filter_from='r', filter_to='g')
-
-    plt.plot(x2, flux_equation(x2, *g_vars[:6]), label='Best Fit Green', color='g')
-    plt.errorbar(x2, y2, yerr2, ls='none', label='Green Data', color='g')
-
-    # I band data
-    i_vars = scale_variables(best, filter_from='r', filter_to='i')
-
-    plt.plot(x3, flux_equation(x3, *i_vars[:6]), label='Best Fit I', color='b')
-    plt.errorbar(x3, y3, yerr3, ls='none', label='I Data', color='b')
-
-    plt.xlim([55800, 56400])
-    plt.legend()
-    plt.show()
-
-    plt.plot(x2, flux_equation(x2, *g_vars[:6]), label='Best Fit Green', color='g')
-    plt.errorbar(x2, y2, yerr2, ls='none', label='Green Data', color='g')
-    plt.legend()
-    plt.show()
+    plt.plot(x2, flux_equation(x2, *g_vars[:6]), label='Best Fit G', color='g')
+    plt.errorbar(x2, y2, yerr2, ls='none', label='G Data', color='g')
 
     # I band data
     i_vars = scale_variables(best, filter_from='r', filter_to='i')
     plt.plot(x3, flux_equation(x3, *i_vars[:6]), label='Best Fit I', color='b')
     plt.errorbar(x3, y3, yerr3, ls='none', label='I Data', color='b')
+
+    # Z band data
+    z_vars = scale_variables(best, filter_from='i', filter_to='z')
+    plt.plot(x4, flux_equation(x4, *z_vars[:6]), label='Best Fit Z', color='y')
+    plt.errorbar(x4, y4, yerr4, ls='none', label='Z Data', color='y')
+
+    plt.xlim([55900, 56100])
+    plt.ylim([-50, 400])
+    plt.legend()
+    plt.show()
+
+    plt.plot(x2, flux_equation(x2, *g_vars[:6]), label='Best Fit G', color='g')
+    plt.errorbar(x2, y2, yerr2, ls='none', label='G Data', color='g')
+    plt.legend()
+    plt.show()
+
+    # I band data
+    i_vars = scale_variables(best, filter_from='r', filter_to='i')
+    plt.plot(x3, flux_equation(x3, *i_vars[:6]), label='Best Fit I', color='b')
+    plt.errorbar(x3, y3, yerr3, ls='none', label='I Data', color='b')
+    plt.legend()
+    plt.show()
+
+    # Z band data
+    z_vars = scale_variables(best, filter_from='i', filter_to='z')
+    plt.plot(x4, flux_equation(x4, *z_vars[:6]), label='Best Fit Z', color='y')
+    plt.errorbar(x4, y4, yerr4, ls='none', label='Z Data', color='y')
+    plt.ylim([-50, 400])
     plt.legend()
     plt.show()
 
     # Corner
     flat_samples = sampler.get_chain(discard=500, thin=10, flat=True)
     labels = ["Amplitude", "Plateau Slope", "Plateau Duration", "Reference Epoch", "Rise Time", "Fall Time", "Scatter",
-              "Amplitude Scaler", "Plateau Scaler", "Duration Scaler", "Rise Scaler", "Fall Scaler", "Scatter_g",
-              "I_amplitude", "I_plateau", "I_duration", "I_rise", "I_fall", "I_scatter"]
+              "G_amplitude", "G_plateau", "G_duration", "G_rise", "G_fall", "G_scatter",
+              "I_amplitude", "I_plateau", "I_duration", "I_rise", "I_fall", "I_scatter",
+              "Z_amplitude", "Z_plateau", "Z_duration", "Z_rise", "Z_fall", "Z_scatter"]
     corner.corner(flat_samples, labels=labels)
     plt.show()
 
@@ -225,4 +243,5 @@ if __name__ == '__main__':
     xr, yr, yerr_r = read_data('r')
     xg, yg, yerr_g = read_data('g')
     xi, yi, yerr_i = read_data('i')
-    mcmc(xr, yr, yerr_r, xg, yg, yerr_g, xi, yi, yerr_i)
+    xz, yz, yerr_z = read_data('z')
+    mcmc(xr, yr, yerr_r, xg, yg, yerr_g, xi, yi, yerr_i, xz, yz, yerr_z)
