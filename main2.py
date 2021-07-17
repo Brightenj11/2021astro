@@ -20,9 +20,10 @@ def read_data(filter_name, filename: str = 'PS1_PS1MD_PSc370330.snana.dat'):
 
     for entree in data:
         if entree[1] == filter_name:
-            x.append(entree[0])
-            y.append(entree[2])
-            yerr.append(entree[3])
+            if entree[3] < 100:
+                x.append(entree[0])
+                y.append(entree[2])
+                yerr.append(entree[3])
     return np.array(x), np.array(y), np.array(yerr)
 
 
@@ -58,12 +59,26 @@ def scale_variables(flux_var, filter_from, filter_to):
 
     # Scale Variables
     temp_var = np.zeros(7)
-    temp_var[0] = 10. ** amplitude * amplitude_scale
+    temp_var[0] = amplitude + np.log10(amplitude_scale)  # Amplitude is in log space
     temp_var[1], temp_var[2] = beta * beta_scale, gamma * gamma_scale
     temp_var[3] = t0
     temp_var[4], temp_var[5] = tau_rise * tau_rise_scale, tau_fall * tau_fall_scale
     temp_var[6] = scatter
     return temp_var
+
+
+def plot_data_vs_fit(x, y, yerr, flux_vars, filter_from, filter_to):
+    plot_color = 'b'
+    if filter_to == 'g' or filter_to == 'r':
+        plot_color = filter_to
+    if filter_to == 'z':
+        plot_color = 'y'
+    # Scale Variables
+    i_vars = scale_variables(flux_vars, filter_from=filter_from, filter_to=filter_to)
+    # Plot fit then data
+    plt.plot(x, flux_equation(x, 10. ** i_vars[0], *i_vars[1:6]), label='Best Fit ' + filter_to, color=plot_color)
+    plt.errorbar(x, y, yerr, ls='none', label=filter_to + ' Data', color=plot_color)
+    plt.show()
 
 
 def flux_equation(time, amplitude, beta, gamma, t0, tau_rise, tau_fall):
@@ -79,9 +94,35 @@ def flux_equation(time, amplitude, beta, gamma, t0, tau_rise, tau_fall):
     :param tau_fall: Fall Time (days)
     :return: Flux over time
     """
+    # print(amplitude)
     return np.nan_to_num(amplitude * ((1 - beta * np.minimum(time - t0, gamma)) *
                          np.exp(-(np.maximum(time - t0, gamma) - gamma) / tau_fall)) /
                          (1 + np.exp(-(time - t0) / tau_rise)))
+
+
+def sanders(t, t0, log_a, log_b1, log_b2, log_bdN, log_bdC, t1, tp, t2, td, M_p):
+    a = 10. ** log_a
+    b1 = 10. ** log_b1
+    b2 = 10. ** log_b2
+    bdN = 10. ** log_bdN
+    bdC = 10. ** log_bdC
+
+    M_1 = M_p / np.exp(b1 * tp)
+    M_2 = M_p / np.exp(-b2 * t2)
+    M_d = M_2 / np.exp(-bdN * td)
+
+    if t < t0:
+        return 0.0
+    if t0 < t < t0 + t1:
+        return M_1 * (t / t1) ** a
+    if t0 + t1 < t < t0 + t1 + tp:
+        return M_1 * np.exp(b1 * (t - t1 - t0))
+    if t0 + t1 + tp < t < t0 + t1 + tp + t2:
+        return M_p * np.exp(-b1 * (t - (tp + t1 + t0)))
+    if t0 + t1 + tp + t2 < t < t0 + t1 + tp + t2 + td:
+        return M_2 * np.exp(-bdN * (t - (t2 + tp + t1 + t0)))
+    if t0 + t1 + tp + t2 + td < t:
+        return M_d * np.exp(-bdC * (t - (td + t2 + tp + t1 + t0)))
 
 
 def log_likelihood(flux_vars, x, y, yerr):
@@ -131,7 +172,7 @@ def log_prior_scale(flux_vars, yerr):
            and (s_n2 < 3 * np.std(yerr))):
         return -np.inf
 
-    # TODO: Do I need different mu/sigma for each scaling variable?
+    # TODO: Should we change different mu/sigma for each scaling variable
     # Gaussian Priors for all scaling variables
     mu1 = 1
     sigma1 = 0.5
@@ -160,72 +201,74 @@ def log_probability(flux_vars, x, y, yerr, x2, y2, yerr2, x3, y3, yerr3, x4, y4,
     vars_g = scale_variables(flux_vars, filter_from='r', filter_to='g')
     vars_i = scale_variables(flux_vars, filter_from='r', filter_to='i')
     vars_z = scale_variables(flux_vars, filter_from='i', filter_to='z')
-
     return lp_r + lp_g + lp_i + lp_z + log_likelihood(vars_r, x, y, yerr) + log_likelihood(vars_g, x2, y2, yerr2) +\
         log_likelihood(vars_i, x3, y3, yerr3) + log_likelihood(vars_z, x4, y4, yerr4)
 
 
 def mcmc(x, y, yerr, x2, y2, yerr2, x3, y3, yerr3, x4, y4, yerr4):
     """
-    Runs emcee given x, y, yerr and plots the best fit and flux_vars corner plot given data (x, y, yerr, ...)
+    Runs emcee given data and plots the best fit and flux_vars corner plot given data (x, y, yerr, ...)
     """
     # Set number of dimensions, walkers, and initial position
     num_dim, num_walkers = 25, 100
-    p0 = [np.log10(200), 0.001, 100, x[np.argmax(y)], 5, 10, 20, 1.1, 1.1, 1, 1, 1, 10, 1, 1, 1, 1, 1, 10,
-          1, 1, 1, 1, 1, 10]
+    p0 = [np.log10(500), 0.001, 100, x[np.argmax(y)], 5, 10, 2 * np.std(yerr), 1, 1, 1, 1, 1, 2 * np.std(yerr),
+          1, 1, 1, 1, 1, 2 * np.std(yerr), 1, 1, 1, 1, 1, 2 * np.std(yerr)]
     pos = [p0 + 1e-4 * np.random.randn(num_dim) for i in range(num_walkers)]
 
     # Run MCMC
     sampler = emcee.EnsembleSampler(num_walkers, num_dim, log_probability, args=(x, y, yerr, x2, y2, yerr2,
                                                                                  x3, y3, yerr3, x4, y4, yerr4))
-    sampler.run_mcmc(pos, 7500)
+    sampler.run_mcmc(pos, 5000)
 
     samples = sampler.get_chain(flat=True)
     best = samples[np.argmax(sampler.get_log_prob())]
     print('best', best)
 
-    # TODO: Make a plotting function
-    # Model Fits vs Data
+    # TODO: Make a plotting function, add more points (longer time)
+    # Model All Band Fits vs Data
     plt.plot(x, flux_equation(x, 10. ** best[0], *best[1:6]), label='Best Fit R', color='r')
     plt.errorbar(x, y, yerr, ls='none', label='R Data', color='r')
 
     # G band data
     g_vars = scale_variables(best, filter_from='r', filter_to='g')
-    plt.plot(x2, flux_equation(x2, *g_vars[:6]), label='Best Fit G', color='g')
+    plt.plot(x2, flux_equation(x2, 10. ** g_vars[0], *g_vars[1:6]), label='Best Fit G', color='g')
     plt.errorbar(x2, y2, yerr2, ls='none', label='G Data', color='g')
 
     # I band data
     i_vars = scale_variables(best, filter_from='r', filter_to='i')
-    plt.plot(x3, flux_equation(x3, *i_vars[:6]), label='Best Fit I', color='b')
+    plt.plot(x3, flux_equation(x3, 10. ** i_vars[0], *i_vars[1:6]), label='Best Fit I', color='b')
     plt.errorbar(x3, y3, yerr3, ls='none', label='I Data', color='b')
 
     # Z band data
     z_vars = scale_variables(best, filter_from='i', filter_to='z')
-    plt.plot(x4, flux_equation(x4, *z_vars[:6]), label='Best Fit Z', color='y')
+    plt.plot(x4, flux_equation(x4, 10. ** z_vars[0], *z_vars[1:6]), label='Best Fit Z', color='y')
     plt.errorbar(x4, y4, yerr4, ls='none', label='Z Data', color='y')
-
-    plt.xlim([55900, 56100])
-    plt.ylim([-50, 400])
     plt.legend()
     plt.show()
 
-    plt.plot(x2, flux_equation(x2, *g_vars[:6]), label='Best Fit G', color='g')
+    # R band fit
+    plt.plot(x, flux_equation(x, 10. ** best[0], *best[1:6]), label='Best Fit R', color='r')
+    plt.errorbar(x, y, yerr, ls='none', label='R Data', color='r')
+    plt.legend()
+    plt.show()
+
+    # G band fit
+    plt.plot(x2, flux_equation(x2, 10. ** g_vars[0], *g_vars[1:6]), label='Best Fit G', color='g')
     plt.errorbar(x2, y2, yerr2, ls='none', label='G Data', color='g')
     plt.legend()
     plt.show()
 
-    # I band data
+    # I band fit
     i_vars = scale_variables(best, filter_from='r', filter_to='i')
-    plt.plot(x3, flux_equation(x3, *i_vars[:6]), label='Best Fit I', color='b')
+    plt.plot(x3, flux_equation(x3, 10. ** i_vars[0], *i_vars[1:6]), label='Best Fit I', color='b')
     plt.errorbar(x3, y3, yerr3, ls='none', label='I Data', color='b')
     plt.legend()
     plt.show()
 
-    # Z band data
+    # Z band fit
     z_vars = scale_variables(best, filter_from='i', filter_to='z')
-    plt.plot(x4, flux_equation(x4, *z_vars[:6]), label='Best Fit Z', color='y')
+    plt.plot(x4, flux_equation(x4, 10. ** z_vars[0], *z_vars[1:6]), label='Best Fit Z', color='y')
     plt.errorbar(x4, y4, yerr4, ls='none', label='Z Data', color='y')
-    plt.ylim([-50, 400])
     plt.legend()
     plt.show()
 
@@ -235,13 +278,65 @@ def mcmc(x, y, yerr, x2, y2, yerr2, x3, y3, yerr3, x4, y4, yerr4):
               "G_amplitude", "G_plateau", "G_duration", "G_rise", "G_fall", "G_scatter",
               "I_amplitude", "I_plateau", "I_duration", "I_rise", "I_fall", "I_scatter",
               "Z_amplitude", "Z_plateau", "Z_duration", "Z_rise", "Z_fall", "Z_scatter"]
-    corner.corner(flat_samples, labels=labels)
+    figure = corner.corner(flat_samples, label_kwargs={"fontsize": 6})
+    # TODO: Fix plotting
+    # figure.subplots_adjust(right=1.2, top=1.2)
+    for ax in figure.get_axes():
+        ax.tick_params(axis='both', labelsize=7)
+        ax.tick_params(axis='both', which='major', pad=0.25)
+    # figure.savefig("corner_griz.png", dpi=200, pad_inches=0.3, bbox_inches='tight')
+
+    # TODO: Fix plot location
+    # plt.plot(np.linspace(0, 2))
+    # plt.savefig('../../Documents/2021astro/test.png')
     plt.show()
 
 
+def convertflux(flux_arr):
+    return -2.5 * np.log10(flux_arr) + 27.5
+
+
+def convertlum(arr):
+    return -2.5 * np.log10(10 ** 7 * arr)
+
+
 if __name__ == '__main__':
-    xr, yr, yerr_r = read_data('r')
-    xg, yg, yerr_g = read_data('g')
-    xi, yi, yerr_i = read_data('i')
-    xz, yz, yerr_z = read_data('z')
-    mcmc(xr, yr, yerr_r, xg, yg, yerr_g, xi, yi, yerr_i, xz, yz, yerr_z)
+    xr, yr, yerr_r = read_data('r', filename='PS1_PS1MD_PSc300221.snana.dat')
+    xg, yg, yerr_g = read_data('g', filename='PS1_PS1MD_PSc300221.snana.dat')
+    xi, yi, yerr_i = read_data('i', filename='PS1_PS1MD_PSc300221.snana.dat')
+    xz, yz, yerr_z = read_data('z', filename='PS1_PS1MD_PSc300221.snana.dat')
+    # mcmc(xr, yr, yerr_r, xg, yg, yerr_g, xi, yi, yerr_i, xz, yz, yerr_z)
+
+    v = np.vectorize(sanders, otypes=[float])
+
+    # PS1 - 10ae
+    # plt.scatter(x, v(x, 55239.3, -1.1, -2.7, -3.3, -3.0, -5.6, 0.9, 3.0, 76, 10., 0.84))
+    # data = v(x, 55239.3, -1.1, -2.7, -3.3, -3.0, -5.6, 0.9, 3.0, 76, 10., 0.84)
+    # print(data)
+    # print(data[data != 0])
+
+    # PS1 - 11 wj (Too little points)
+    # xr, yr, yerr_r = np.array([55674.3, 55677.3, 55680.3]), np.array([525.747, 492.933, 491.648]), np.array([10.982, 11.776, 15.516])
+    # xg, yg, yerr_g = np.array([55674.3, 55677.3, 55680.3]), np.array([589.718, 557.078, 507.590]), np.array([9.923, 11.472, 10.724])
+    # xi, yi, yerr_i = np.array([55672.3, 55675.3, 55681.3]), np.array([604.178, 581.332, 623.111]), np.array([15.211, 14.797, 16.659])
+    # xz, yz, yerr_z = np.array([55673.3, 55676.3]), np.array([512.421, 480.533]), np.array([16.497, 35.449])
+    # plt.scatter(xd, yd)
+    # plt.plot(xd, v(xd, 55669.5, -1.0, -2.3, -3.4, -3.0, -5.0, 1.0, 4, 98, 10, 0.77), label='Sanders fit G', color='g')
+    # data = v(xd, 55669.5, -1.0, -2.3, -3.4, -3.0, -5.0, 1.0, 4, 98, 10, 0.77)
+    # print(data)
+
+    # PS1 - 11apd
+    # Everything is in ab magnitude
+    # g fit -
+    # plt.scatter(xg, convertlum(v(xg, 55789.3, -1.0, -2.2, -3.6, -3.1, -4.4, 0.9, 4.0, 107., 11., 1.16)))
+    # plt.scatter(xg, convertflux(yg))
+    # r band
+    xs = np.linspace(55770, 55800)
+    plt.scatter(xs, convertlum(v(xs, 55789.3, -1.0, -2.5, -4.7, -2.7, -3.9, 1.0, 6.0, 84.0, 12.0, 1.02)))
+    # plt.scatter(xd, yd)
+
+    # plt.scatter(xi, convertflux(yi))
+    # plt.scatter(xi, convertlum(v(xi, 55789.3, -1.0, -4.2, -4.8, -3.1, -4.2, 1.0, 12.0, 83.0, 11.0, 1.00)))
+    # plt.scatter(xi, v(xi, 55789.3, -1.0, -4.2, -4.8, -3.1, -4.2, 1.0, 12.0, 83.0, 11.0, 1.00))
+    plt.gca().invert_yaxis()
+    plt.show()
