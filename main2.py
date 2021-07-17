@@ -68,17 +68,19 @@ def scale_variables(flux_var, filter_from, filter_to):
 
 
 def plot_data_vs_fit(x, y, yerr, flux_vars, filter_from, filter_to):
+    """Plots a specific filter's fit with its data"""
+    # Set plot color
     plot_color = 'b'
     if filter_to == 'g' or filter_to == 'r':
         plot_color = filter_to
     if filter_to == 'z':
         plot_color = 'y'
     # Scale Variables
-    i_vars = scale_variables(flux_vars, filter_from=filter_from, filter_to=filter_to)
+    scaled_vars = scale_variables(flux_vars, filter_from=filter_from, filter_to=filter_to)
     # Plot fit then data
-    plt.plot(x, flux_equation(x, 10. ** i_vars[0], *i_vars[1:6]), label='Best Fit ' + filter_to, color=plot_color)
+    plt.plot(x, flux_equation(x, 10. ** scaled_vars[0], *scaled_vars[1:6]), label='Best Fit ' + filter_to,
+             color=plot_color)
     plt.errorbar(x, y, yerr, ls='none', label=filter_to + ' Data', color=plot_color)
-    plt.show()
 
 
 def flux_equation(time, amplitude, beta, gamma, t0, tau_rise, tau_fall):
@@ -100,29 +102,29 @@ def flux_equation(time, amplitude, beta, gamma, t0, tau_rise, tau_fall):
                          (1 + np.exp(-(time - t0) / tau_rise)))
 
 
-def sanders(t, t0, log_a, log_b1, log_b2, log_bdN, log_bdC, t1, tp, t2, td, M_p):
+def sanders(t, t0, log_a, log_b1, log_b2, log_bdn, log_bdc, t1, tp, t2, td, m_p):
     a = 10. ** log_a
     b1 = 10. ** log_b1
     b2 = 10. ** log_b2
-    bdN = 10. ** log_bdN
-    bdC = 10. ** log_bdC
+    bdn = 10. ** log_bdn
+    bdc = 10. ** log_bdc
 
-    M_1 = M_p / np.exp(b1 * tp)
-    M_2 = M_p / np.exp(-b2 * t2)
-    M_d = M_2 / np.exp(-bdN * td)
+    m_1 = m_p / np.exp(b1 * tp)
+    m_2 = m_p / np.exp(-b2 * t2)
+    m_d = m_2 / np.exp(-bdn * td)
 
     if t < t0:
         return 0.0
     if t0 < t < t0 + t1:
-        return M_1 * (t / t1) ** a
+        return m_1 * (t / t1) ** a
     if t0 + t1 < t < t0 + t1 + tp:
-        return M_1 * np.exp(b1 * (t - t1 - t0))
+        return m_1 * np.exp(b1 * (t - t1 - t0))
     if t0 + t1 + tp < t < t0 + t1 + tp + t2:
-        return M_p * np.exp(-b1 * (t - (tp + t1 + t0)))
+        return m_p * np.exp(-b1 * (t - (tp + t1 + t0)))
     if t0 + t1 + tp + t2 < t < t0 + t1 + tp + t2 + td:
-        return M_2 * np.exp(-bdN * (t - (t2 + tp + t1 + t0)))
+        return m_2 * np.exp(-bdn * (t - (t2 + tp + t1 + t0)))
     if t0 + t1 + tp + t2 + td < t:
-        return M_d * np.exp(-bdC * (t - (td + t2 + tp + t1 + t0)))
+        return m_d * np.exp(-bdc * (t - (td + t2 + tp + t1 + t0)))
 
 
 def log_likelihood(flux_vars, x, y, yerr):
@@ -224,25 +226,13 @@ def mcmc(x, y, yerr, x2, y2, yerr2, x3, y3, yerr3, x4, y4, yerr4):
     best = samples[np.argmax(sampler.get_log_prob())]
     print('best', best)
 
-    # TODO: Make a plotting function, add more points (longer time)
-    # Model All Band Fits vs Data
+    # Plot All Band Fits vs ALl data
     plt.plot(x, flux_equation(x, 10. ** best[0], *best[1:6]), label='Best Fit R', color='r')
     plt.errorbar(x, y, yerr, ls='none', label='R Data', color='r')
 
-    # G band data
-    g_vars = scale_variables(best, filter_from='r', filter_to='g')
-    plt.plot(x2, flux_equation(x2, 10. ** g_vars[0], *g_vars[1:6]), label='Best Fit G', color='g')
-    plt.errorbar(x2, y2, yerr2, ls='none', label='G Data', color='g')
-
-    # I band data
-    i_vars = scale_variables(best, filter_from='r', filter_to='i')
-    plt.plot(x3, flux_equation(x3, 10. ** i_vars[0], *i_vars[1:6]), label='Best Fit I', color='b')
-    plt.errorbar(x3, y3, yerr3, ls='none', label='I Data', color='b')
-
-    # Z band data
-    z_vars = scale_variables(best, filter_from='i', filter_to='z')
-    plt.plot(x4, flux_equation(x4, 10. ** z_vars[0], *z_vars[1:6]), label='Best Fit Z', color='y')
-    plt.errorbar(x4, y4, yerr4, ls='none', label='Z Data', color='y')
+    plot_data_vs_fit(x2, y2, yerr2, best, filter_from='r', filter_to='g')
+    plot_data_vs_fit(x3, y3, yerr3, best, filter_from='r', filter_to='i')
+    plot_data_vs_fit(x4, y4, yerr4, best, filter_from='i', filter_to='z')
     plt.legend()
     plt.show()
 
@@ -253,42 +243,33 @@ def mcmc(x, y, yerr, x2, y2, yerr2, x3, y3, yerr3, x4, y4, yerr4):
     plt.show()
 
     # G band fit
-    plt.plot(x2, flux_equation(x2, 10. ** g_vars[0], *g_vars[1:6]), label='Best Fit G', color='g')
-    plt.errorbar(x2, y2, yerr2, ls='none', label='G Data', color='g')
+    plot_data_vs_fit(x2, y2, yerr2, best, filter_from='r', filter_to='g')
     plt.legend()
     plt.show()
 
     # I band fit
-    i_vars = scale_variables(best, filter_from='r', filter_to='i')
-    plt.plot(x3, flux_equation(x3, 10. ** i_vars[0], *i_vars[1:6]), label='Best Fit I', color='b')
-    plt.errorbar(x3, y3, yerr3, ls='none', label='I Data', color='b')
+    plot_data_vs_fit(x3, y3, yerr3, best, filter_from='r', filter_to='i')
     plt.legend()
     plt.show()
 
     # Z band fit
-    z_vars = scale_variables(best, filter_from='i', filter_to='z')
-    plt.plot(x4, flux_equation(x4, 10. ** z_vars[0], *z_vars[1:6]), label='Best Fit Z', color='y')
-    plt.errorbar(x4, y4, yerr4, ls='none', label='Z Data', color='y')
+    plot_data_vs_fit(x4, y4, yerr4, best, filter_from='i', filter_to='z')
     plt.legend()
     plt.show()
 
-    # Corner
+    # Corner Plot
     flat_samples = sampler.get_chain(discard=500, thin=10, flat=True)
     labels = ["Amplitude", "Plateau Slope", "Plateau Duration", "Reference Epoch", "Rise Time", "Fall Time", "Scatter",
               "G_amplitude", "G_plateau", "G_duration", "G_rise", "G_fall", "G_scatter",
               "I_amplitude", "I_plateau", "I_duration", "I_rise", "I_fall", "I_scatter",
               "Z_amplitude", "Z_plateau", "Z_duration", "Z_rise", "Z_fall", "Z_scatter"]
     figure = corner.corner(flat_samples, label_kwargs={"fontsize": 6})
-    # TODO: Fix plotting
+    # TODO: adjust plotting
     # figure.subplots_adjust(right=1.2, top=1.2)
     for ax in figure.get_axes():
         ax.tick_params(axis='both', labelsize=7)
         ax.tick_params(axis='both', which='major', pad=0.25)
-    # figure.savefig("corner_griz.png", dpi=200, pad_inches=0.3, bbox_inches='tight')
-
-    # TODO: Fix plot location
-    # plt.plot(np.linspace(0, 2))
-    # plt.savefig('../../Documents/2021astro/test.png')
+    # figure.savefig("../../Documents/2021astro/corner_griz.png", dpi=200, pad_inches=0.3, bbox_inches='tight')
     plt.show()
 
 
@@ -301,42 +282,9 @@ def convertlum(arr):
 
 
 if __name__ == '__main__':
-    xr, yr, yerr_r = read_data('r', filename='PS1_PS1MD_PSc300221.snana.dat')
-    xg, yg, yerr_g = read_data('g', filename='PS1_PS1MD_PSc300221.snana.dat')
-    xi, yi, yerr_i = read_data('i', filename='PS1_PS1MD_PSc300221.snana.dat')
-    xz, yz, yerr_z = read_data('z', filename='PS1_PS1MD_PSc300221.snana.dat')
-    # mcmc(xr, yr, yerr_r, xg, yg, yerr_g, xi, yi, yerr_i, xz, yz, yerr_z)
-
-    v = np.vectorize(sanders, otypes=[float])
-
-    # PS1 - 10ae
-    # plt.scatter(x, v(x, 55239.3, -1.1, -2.7, -3.3, -3.0, -5.6, 0.9, 3.0, 76, 10., 0.84))
-    # data = v(x, 55239.3, -1.1, -2.7, -3.3, -3.0, -5.6, 0.9, 3.0, 76, 10., 0.84)
-    # print(data)
-    # print(data[data != 0])
-
-    # PS1 - 11 wj (Too little points)
-    # xr, yr, yerr_r = np.array([55674.3, 55677.3, 55680.3]), np.array([525.747, 492.933, 491.648]), np.array([10.982, 11.776, 15.516])
-    # xg, yg, yerr_g = np.array([55674.3, 55677.3, 55680.3]), np.array([589.718, 557.078, 507.590]), np.array([9.923, 11.472, 10.724])
-    # xi, yi, yerr_i = np.array([55672.3, 55675.3, 55681.3]), np.array([604.178, 581.332, 623.111]), np.array([15.211, 14.797, 16.659])
-    # xz, yz, yerr_z = np.array([55673.3, 55676.3]), np.array([512.421, 480.533]), np.array([16.497, 35.449])
-    # plt.scatter(xd, yd)
-    # plt.plot(xd, v(xd, 55669.5, -1.0, -2.3, -3.4, -3.0, -5.0, 1.0, 4, 98, 10, 0.77), label='Sanders fit G', color='g')
-    # data = v(xd, 55669.5, -1.0, -2.3, -3.4, -3.0, -5.0, 1.0, 4, 98, 10, 0.77)
-    # print(data)
-
-    # PS1 - 11apd
-    # Everything is in ab magnitude
-    # g fit -
-    # plt.scatter(xg, convertlum(v(xg, 55789.3, -1.0, -2.2, -3.6, -3.1, -4.4, 0.9, 4.0, 107., 11., 1.16)))
-    # plt.scatter(xg, convertflux(yg))
-    # r band
-    xs = np.linspace(55770, 55800)
-    plt.scatter(xs, convertlum(v(xs, 55789.3, -1.0, -2.5, -4.7, -2.7, -3.9, 1.0, 6.0, 84.0, 12.0, 1.02)))
-    # plt.scatter(xd, yd)
-
-    # plt.scatter(xi, convertflux(yi))
-    # plt.scatter(xi, convertlum(v(xi, 55789.3, -1.0, -4.2, -4.8, -3.1, -4.2, 1.0, 12.0, 83.0, 11.0, 1.00)))
-    # plt.scatter(xi, v(xi, 55789.3, -1.0, -4.2, -4.8, -3.1, -4.2, 1.0, 12.0, 83.0, 11.0, 1.00))
-    plt.gca().invert_yaxis()
-    plt.show()
+    file_name = 'PS1_PS1MD_PSc150692.snana.dat'
+    xr, yr, yerr_r = read_data('r', filename=file_name)
+    xg, yg, yerr_g = read_data('g', filename=file_name)
+    xi, yi, yerr_i = read_data('i', filename=file_name)
+    xz, yz, yerr_z = read_data('z', filename=file_name)
+    mcmc(xr, yr, yerr_r, xg, yg, yerr_g, xi, yi, yerr_i, xz, yz, yerr_z)
