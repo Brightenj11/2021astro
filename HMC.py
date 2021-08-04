@@ -69,7 +69,6 @@ def model(x, x2, x3, x4, y=None, y2=None, y3=None, y4=None, yerr=None, yerr2=Non
     scale_g = numpyro.sample('scale_g', dist.TruncatedNormal(0., 1., .5))
     scale_tr = numpyro.sample('scale_tr', dist.TruncatedNormal(0., 1., .5))
     scale_tf = numpyro.sample('scale_tf', dist.TruncatedNormal(0., 1., .5))
-
     g_sn = numpyro.sample('g_sn', dist.HalfNormal(jnp.std(yerr2)))
     # Scale G band
     g_amp = log_amplitude + jnp.log10(scale_a)
@@ -84,7 +83,6 @@ def model(x, x2, x3, x4, y=None, y2=None, y3=None, y4=None, yerr=None, yerr2=Non
     i_scale_g = numpyro.sample('i_scale_g', dist.TruncatedNormal(0., 1., .5))
     i_scale_tr = numpyro.sample('i_scale_tr', dist.TruncatedNormal(0., 1., .5))
     i_scale_tf = numpyro.sample('i_scale_tf', dist.TruncatedNormal(0., 1., .5))
-
     i_sn = numpyro.sample('i_sn', dist.HalfNormal(jnp.std(yerr3)))
 
     i_amp = log_amplitude + jnp.log10(i_scale_a)
@@ -99,7 +97,6 @@ def model(x, x2, x3, x4, y=None, y2=None, y3=None, y4=None, yerr=None, yerr2=Non
     z_scale_g = numpyro.sample('z_scale_g', dist.TruncatedNormal(0., 1., .5))
     z_scale_tr = numpyro.sample('z_scale_tr', dist.TruncatedNormal(0., 1., .5))
     z_scale_tf = numpyro.sample('z_scale_tf', dist.TruncatedNormal(0., 1., .5))
-
     z_sn = numpyro.sample('z_sn', dist.HalfNormal(jnp.std(yerr4)))
 
     z_amp = i_amp + jnp.log10(z_scale_a)
@@ -117,11 +114,21 @@ def model(x, x2, x3, x4, y=None, y2=None, y3=None, y4=None, yerr=None, yerr2=Non
                                                                  i_tr, i_tf))
     flux_eq_z = numpyro.deterministic('flux_eq_z', flux_equation(x4, 10. ** z_amp, z_beta, 10. ** z_gamma, t0,
                                                                  z_tr, z_tf))
+    '''
+    flux_eq = flux_equation(x, 10. ** log_amplitude, beta, 10. ** log_gamma, t0,
+                            tau_rise, tau_fall)
+    flux_eq_g = flux_equation(x2, 10. ** g_amp, g_beta, 10. ** g_gamma, t0,
+                              g_tr, g_tf)
+    flux_eq_i = flux_equation(x3, 10. ** i_amp, i_beta, 10. ** i_gamma, t0,
+                              i_tr, i_tf)
+    flux_eq_z = flux_equation(x4, 10. ** z_amp, z_beta, 10. ** z_gamma, t0,
+                              z_tr, z_tf)
+    ''' 
     if y is not None and yerr is not None:
-        numpyro.sample('obs', dist.Normal(flux_eq, yerr ** 2 + s_n ** 2), obs=y)
-        numpyro.sample('obs2', dist.Normal(flux_eq_g, yerr2 ** 2 + g_sn ** 2), obs=y2)
-        numpyro.sample('obs3', dist.Normal(flux_eq_i, yerr3 ** 2 + i_sn ** 2), obs=y3)
-        numpyro.sample('obs4', dist.Normal(flux_eq_z, yerr4 ** 2 + z_sn ** 2), obs=y4)
+        numpyro.sample('obs', dist.Normal(flux_eq, yerr ** 2. + s_n ** 2.), obs=y)
+        numpyro.sample('obs2', dist.Normal(flux_eq_g, yerr2 ** 2. + g_sn ** 2.), obs=y2)
+        numpyro.sample('obs3', dist.Normal(flux_eq_i, yerr3 ** 2. + i_sn ** 2.), obs=y3)
+        numpyro.sample('obs4', dist.Normal(flux_eq_z, yerr4 ** 2. + z_sn ** 2.), obs=y4)
 
 
 if __name__ == '__main__':
@@ -151,11 +158,12 @@ if __name__ == '__main__':
 
     # Plot trace
     # print(ds.sample_stats['diverging'])
+    az.rcParams['plot.max_subplots'] = 25
     az.plot_trace(ds.posterior)
     plt.show()
 
     # Plot variable densities
-    az.plot_density(ds.posterior, var_names=labels)
+    az.plot_posterior(ds.posterior, var_names=labels)
     plt.show()
 
     # Plot random samples
