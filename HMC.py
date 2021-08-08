@@ -79,13 +79,12 @@ def model(x, x2, x3, x4, y=None, y2=None, y3=None, y4=None, yerr=None, yerr2=Non
     g_tr = tau_rise * scale_tr
     g_tf = tau_fall * scale_tf
 
-    '''
     # I band
-    i_scale_a = numpyro.sample('i_scale_a', dist.TruncatedNormal(0., 1., .5))
-    i_scale_b = numpyro.sample('i_scale_b', dist.TruncatedNormal(0., 1., .5))
-    i_scale_g = numpyro.sample('i_scale_g', dist.TruncatedNormal(0., 1., .5))
-    i_scale_tr = numpyro.sample('i_scale_tr', dist.TruncatedNormal(0., 1., .5))
-    i_scale_tf = numpyro.sample('i_scale_tf', dist.TruncatedNormal(0., 1., .5))
+    i_scale_a = numpyro.sample('i_scale_a', dist.TruncatedNormal(0., 1., 1.))
+    i_scale_b = numpyro.sample('i_scale_b', dist.TruncatedNormal(0., 1., 1.))
+    i_scale_g = numpyro.sample('i_scale_g', dist.TruncatedNormal(0., 1., 1.))
+    i_scale_tr = numpyro.sample('i_scale_tr', dist.TruncatedNormal(0., 1., 1.))
+    i_scale_tf = numpyro.sample('i_scale_tf', dist.TruncatedNormal(0., 1., 1.))
     i_sn = numpyro.sample('i_sn', dist.HalfNormal(jnp.std(yerr3)))
 
     i_amp = log_amplitude + jnp.log10(i_scale_a)
@@ -95,11 +94,11 @@ def model(x, x2, x3, x4, y=None, y2=None, y3=None, y4=None, yerr=None, yerr2=Non
     i_tf = tau_fall * i_scale_tf
 
     # Z band
-    z_scale_a = numpyro.sample('z_scale_a', dist.TruncatedNormal(0., 1., .5))
-    z_scale_b = numpyro.sample('z_scale_b', dist.TruncatedNormal(0., 1., .5))
-    z_scale_g = numpyro.sample('z_scale_g', dist.TruncatedNormal(0., 1., .5))
-    z_scale_tr = numpyro.sample('z_scale_tr', dist.TruncatedNormal(0., 1., .5))
-    z_scale_tf = numpyro.sample('z_scale_tf', dist.TruncatedNormal(0., 1., .5))
+    z_scale_a = numpyro.sample('z_scale_a', dist.TruncatedNormal(0., 1., 1.))
+    z_scale_b = numpyro.sample('z_scale_b', dist.TruncatedNormal(0., 1., 1.))
+    z_scale_g = numpyro.sample('z_scale_g', dist.TruncatedNormal(0., 1., 1.))
+    z_scale_tr = numpyro.sample('z_scale_tr', dist.TruncatedNormal(0., 1., 1.))
+    z_scale_tf = numpyro.sample('z_scale_tf', dist.TruncatedNormal(0., 1., 1.))
     z_sn = numpyro.sample('z_sn', dist.HalfNormal(jnp.std(yerr4)))
 
     z_amp = i_amp + jnp.log10(z_scale_a)
@@ -107,41 +106,48 @@ def model(x, x2, x3, x4, y=None, y2=None, y3=None, y4=None, yerr=None, yerr2=Non
     z_gamma = i_gamma + jnp.log10(z_scale_g)
     z_tr = i_tr * z_scale_tr
     z_tf = i_tf * z_scale_tf
-    '''
+
     # Calculate flux values
     flux_eq = numpyro.deterministic('flux_eq', flux_equation(x, 10. ** log_amplitude, beta, 10. ** log_gamma, t0,
                                                              tau_rise, tau_fall))
     flux_eq_g = numpyro.deterministic('flux_eq_g', flux_equation(x2, 10. ** g_amp, g_beta, 10. ** g_gamma, t0,
                                                                  g_tr, g_tf))
-    # flux_eq_i = numpyro.deterministic('flux_eq_i', flux_equation(x3, 10. ** i_amp, i_beta, 10. ** i_gamma, t0,
-    #                                                              i_tr, i_tf))
-    # flux_eq_z = numpyro.deterministic('flux_eq_z', flux_equation(x4, 10. ** z_amp, z_beta, 10. ** z_gamma, t0,
-    #                                                             z_tr, z_tf))
+    flux_eq_i = numpyro.deterministic('flux_eq_i', flux_equation(x3, 10. ** i_amp, i_beta, 10. ** i_gamma, t0,
+                                                                 i_tr, i_tf))
+    flux_eq_z = numpyro.deterministic('flux_eq_z', flux_equation(x4, 10. ** z_amp, z_beta, 10. ** z_gamma, t0,
+                                                                 z_tr, z_tf))
 
     if y is not None and yerr is not None:
-        numpyro.sample('obs', dist.Normal(flux_eq, yerr ** 2. + s_n ** 2.), obs=y)
-        numpyro.sample('obs2', dist.Normal(flux_eq_g, yerr2 ** 2. + g_sn ** 2.), obs=y2)
-        # numpyro.samp  le('obs3', dist.Normal(flux_eq_i, yerr3 ** 2. + i_sn ** 2.), obs=y3)
-        # numpyro.sample('obs4', dist.Normal(flux_eq_z, yerr4 ** 2. + z_sn ** 2.), obs=y4)
+        numpyro.sample('obs', dist.Normal(flux_eq, jnp.sqrt(yerr ** 2. + s_n ** 2.)), obs=y)
+        numpyro.sample('obs2', dist.Normal(flux_eq_g, jnp.sqrt(yerr2 ** 2. + g_sn ** 2.)), obs=y2)
+        numpyro.sample('obs3', dist.Normal(flux_eq_i, jnp.sqrt(yerr3 ** 2. + i_sn ** 2.)), obs=y3)
+        numpyro.sample('obs4', dist.Normal(flux_eq_z, jnp.sqrt(yerr4 ** 2. + z_sn ** 2.)), obs=y4)
 
 
 if __name__ == '__main__':
     # Get data
-    file_name = 'PS1_PS1MD_PSc370330.snana.dat'
+    # file_name = 'PS1_PS1MD_PSc370330.snana.dat'
     # file_name = 'PS1_PS1MD_PSc010163.snana.dat'
+    file_name = 'PS1_PS1MD_PSc000001.snana.dat'
     xr, yr, yerr_r = read_data('r', filename=file_name)
     xg, yg, yerr_g = read_data('g', filename=file_name)
     xi, yi, yerr_i = read_data('i', filename=file_name)
     xz, yz, yerr_z = read_data('z', filename=file_name)
 
-    yerr_r /= 2
-    yerr_g /= 2
+    # Plot data
+    plt.scatter(xr, yr, color='r', label='R band')
+    plt.scatter(xg, yg, color='g', label='G Band')
+    plt.scatter(xi, yi, color='b', label='I band')
+    plt.scatter(xz, yz, color='y', label='Z band')
+    plt.legend()
+    plt.show()
+
     # Run NUTS
     rng_key = random.PRNGKey(0)
     rng_key, rng_key_ = random.split(rng_key)
     kernel = NUTS(model)
 
-    mcmc = MCMC(kernel, num_warmup=75000, num_samples=10000, thinning=1, num_chains=2)
+    mcmc = MCMC(kernel, num_warmup=800, num_samples=200, thinning=1, num_chains=2)
     mcmc.run(rng_key_, x=xr, x2=xg, x3=xi, x4=xz, y=yr, y2=yg, y3=yi, y4=yz, yerr=yerr_r, yerr2=yerr_g, yerr3=yerr_i,
              yerr4=yerr_z, fobs_max=np.max(yr), time_max=xr[np.argmax(yr)])
     mcmc.print_summary()
@@ -149,13 +155,15 @@ if __name__ == '__main__':
 
     # Plot sampling
     ds = az.from_numpyro(mcmc)
-    labels = ["log_amplitude", "beta", "log_gamma", "t0", "tau_rise", "tau_fall", "s_n", "scale_a", "scale_b", "scale_g", "scale_tr", "scale_tf", "g_sn"]
+    labels = ["log_amplitude", "beta", "log_gamma", "t0", "tau_rise", "tau_fall", "s_n", "scale_a", "scale_b",
+              "scale_g", "scale_tr", "scale_tf", "g_sn", "i_scale_a", "i_scale_b", "i_scale_g", "i_scale_tr",
+              "i_scale_tf", "i_sn", "z_scale_a", "z_scale_b", "z_scale_g", "z_scale_tr", "z_scale_tf", "z_sn"]
     # az.plot_pair(ds, var_names=labels, divergences=True)
     # plt.show()
 
     # Plot trace
     # print(ds.sample_stats['diverging'])
-    az.rcParams['plot.max_subplots'] = 50
+    az.rcParams['plot.max_subplots'] = 100
     az.rcParams.update()
     az.plot_trace(ds.posterior)
     plt.show()
@@ -180,11 +188,11 @@ if __name__ == '__main__':
     plt.scatter(xg, yg, color='g')
     plt.plot(xg, ds.posterior.flux_eq_g[0, :n_samples].T, color='g', alpha=0.1)
 
-    # plt.scatter(xi, yi, color='b')
-    # plt.plot(xi, ds.posterior.flux_eq_i[0, :n_samples].T, color='b', alpha=0.1)
+    plt.scatter(xi, yi, color='b')
+    plt.plot(xi, ds.posterior.flux_eq_i[0, :n_samples].T, color='b', alpha=0.1)
 
-    # plt.scatter(xz, yz, color='y')
-    # plt.plot(xz, ds.posterior.flux_eq_z[0, :n_samples].T, color='y', alpha=0.1)
+    plt.scatter(xz, yz, color='y')
+    plt.plot(xz, ds.posterior.flux_eq_z[0, :n_samples].T, color='y', alpha=0.1)
     plt.xlim([xr[np.argmax(yr)] - 100, xr[np.argmax(yr)] + 100])
     plt.show()
 
@@ -197,13 +205,13 @@ if __name__ == '__main__':
     for i in range(n_samples):
         plt.plot(t, predictions['flux_eq_g'][i], color='g', alpha=0.1)
 
-    # plt.scatter(xi, yi, color='b')
-    # for i in range(n_samples):
-    #     plt.plot(t, predictions['flux_eq_i'][i], color='b', alpha=0.1)
+    plt.scatter(xi, yi, color='b')
+    for i in range(n_samples):
+        plt.plot(t, predictions['flux_eq_i'][i], color='b', alpha=0.1)
 
-    # plt.scatter(xz, yz, color='y')
-    # for i in range(n_samples):
-    #     plt.plot(t, predictions['flux_eq_z'][i], color='y', alpha=0.1)
+    plt.scatter(xz, yz, color='y')
+    for i in range(n_samples):
+        plt.plot(t, predictions['flux_eq_z'][i], color='y', alpha=0.1)
     plt.xlim([xr[np.argmax(yr)] - 100, xr[np.argmax(yr)] + 100])
     plt.show()
     '''
