@@ -1,0 +1,202 @@
+\documentclass[12pt]{article}
+
+\usepackage{amsmath}
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,      
+    urlcolor=cyan,
+    pdfpagemode=FullScreen,
+    }
+
+
+\title{2021 Astronomy Notes}
+\date{\today}
+\author{Brighten Jiang}
+
+\renewcommand*\contentsname{Dates}
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+
+\section{6/2}
+We are going to expand on \href{https://sci-hub.do/10.1088/0004-637X/799/2/208}{this paper} by using a much larger sample. The paper basically outlines a model to fit a type of light curve + a hierarchical model (which we won't do but it fits multiple SN at once and considers other factors like location) + uses the model to do several things such as classifying SN and finding information about the SN progenitor. We could make the project more complex by trying the simultaneous fitting (using a gaussian process) of different filters. So the red photons would know what the green photons are doing in an individual SN. I start by reading the paper and do some basic fitting code.
+
+\section{6/3}
+We used \href{https://arxiv.org/pdf/2008.04912.pdf}{this paper} (Hosseinzadeh et al.) to start the basic model. It had the basic equation for the flux of a transient: 
+\begin{equation}
+        F(\Delta t) = \frac{A [1 - \beta \min(\Delta, \gamma)]e^{-\frac{\max(\Delta t, \gamma) - \gamma}{\tau_{fall}}}}{1 + e^{-\frac{\Delta t}{\tau_{rise}}}} 
+        \label{eq:flux}
+\end{equation}
+where $\Delta t = t - t_0.$ There are six parameters and they roughly correspond to physical charactersitics about the SN. I coded the equation up and made a plot function that would plot on an inputted time range.
+
+\section{6/8}
+Now that we have a functioning equation. We need to try to fit it. First, to generate some noisy data, I just add some gaussian noise (using np.random.normal) to the plot. I use \href{http://ashleyvillar.com/journal/2017/04/23/Fitting-Models-with-Moo/}{Ashley's blog post}. The post outlines the things I need to do over the next couple of days (making a model, choosing an objective function, and optimizing the function). 
+
+\section{6/9}
+I start following Ashley's blog post (see 6/8 for details). We had a meeting where she went over Bayes Theorem and MCMC (Markov chain Monte Carlo). Essentially, MCMC is a Monte Carlo (simulation) that has the characteristics of Markov Chain. They are used to sample probability distributions. Bayes theorem allows us to do this and the theorem is: 
+\begin{equation}
+        p(H|D) = \frac{p(H)p(D|H)}{p(D).} 
+\end{equation}
+So in our case, we want to sample from the posterior, $p(H|D)$. Most of the times, this is just the prior, $p(H)$, multiplied by the likelihood, $p(D|H)$. The evidence, $p(D)$, is hard to calculate and ignored. This \href{https://towardsdatascience.com/mcmc-intuition-for-everyone-5ae79fff22b1}{website} does a great job of summarizing MCMC and Bayes theorem. The actual MCMC consists of walkers that survey a surface so that the time spent in each location is proportional to the probability of the location. The walkers start at initial positions and have a probability of moving to a new location. After many walkers, you get the posterior mean and standard deviation. 
+
+\section{6/10}
+I start implementing emcee (A Python MCMC function) using \href{https://emcee.readthedocs.io/en/stable/tutorials/line/}{its tutorial website} and \href{https://prappleizer.github.io/Tutorials/MCMC/MCMC_Tutorial.html}{this website guide}. Priors are imposed over parameters to help guide the MCMC and adds information that we already know (like a guess). Every function will be in log because the probabilities get super small and python would get underflow errors so using log makes them more manageable. I make a log likelihood function (which needs to be evaluated at all points and is the other part of Bayes Theorem), a log prior function that sets uniform and gaussian priors on the 6 parameters, and a log probability function that multiplies (which is add in log) the prior and the likelihood (according to Bayes Theorem). The prior sets areas that are not 'supposed' to be to -infinity (the log of 0, aka really small) and basically tells the model to ignore those spots because 0 x likelihood = 0. After the model runs, you need to discard some of the walker's steps because sometimes it doesn't act like a full Markov Chain and has some memory of its past steps. You can discard the first few hundred steps and keeping every nth step to try to remove 'autocorrelation'. The guassian prior for gamma (plateau duration):
+\begin{equation}
+        \frac{2}{3}(\ln (\frac{1}{\sqrt{2\pi} \sigma_1}) - 0.5 \frac{(\gamma-\mu_1)^2}{\sigma_1^2}) + \frac{1}{3}(\ln (\frac{1}{\sqrt{2\pi} \sigma_2}) - 0.5 \frac{(\gamma-\mu_2)^2}{\sigma_2^2}) 
+\end{equation}
+which follows \href{https://stackoverflow.com/questions/49810234/using-emcee-with-gaussian-priors}{this website.}
+The uniform priors are a range instead of a normal distribution. You just need to set it equal to a number of the specific range and - infinity elsewhere. You don't care what number because it's just a constant and basically scales everything up. The log uniform priors is basically a uniform of the log of the endpoints. So log uniform from a to b is the uniform of $\log a$ to $\log b$
+
+The derivation of the log likelihood function starts with the log of the normal distribution equation: 
+\begin{equation}
+        \ln (f(x)) = \ln(\frac{1}{\sigma \sqrt{2\pi}} e ^{-\frac{1}{2}(\frac{x-\mu}{\sigma})^2}) = -\frac{1}{2}(\frac{x-\mu}{\sigma})^2 - \ln (\sigma \sqrt{2 \pi}).  
+\end{equation}
+The $\ln(\sigma \sqrt{2 \pi})$ can just be written as $\ln(\sigma)$ which can be written as $\frac{1}{2}\ln(\sigma ^2)$ and factored out. 
+
+\section{6/11}
+I started getting some NaN and autocorrelation errors. I'm still not sure why I was getting the NaN errors but they went away... The autocorrelation error means that the MCMC is acting like a true markov chain yet and hasn't converged to a solution yet. It isn't accurately sampling the posterior and not spending the accurate amount of times sampling the appropriate regions. But increasing the number of steps seems to be able to work/increasing the discard number. I plotted a fit and it didn't look too good so Ashley recommended adding another scatter variable to fit for (7 in total). 
+
+\section{6/18}
+Took a few days to set up the scatter and we set it a uniform prior from 0 to 3 * the set up standard deviation. Definition: Degenerate - very related/correlated. I show her the fits and corner plots and fix some minor errors in the corner plot. 
+
+
+\section{6/20}
+Now that we have used emcee to fit to fake data, we can start looking at real SN and LCs. She sent a file that included some basic information (SN name, location (ra/decl), MWEBV (dust), redshift, peakmjd, filters). Then the actual data has the time, filter, flux, flux error, magnitude, and magnitude error. I need to read the file and fit the red band filters. I also needed to slightly adjust the code because now the data has real errobars. Instead of making some up, I need to do $\sigma ^2 = y_{err}^2 + s_n^2$ where $s_n$ is the scatter variable that I fit for (this equation is called a quadrature). I also shifted the priors for t0 to the right because the data was too far right shifted. I made it the time of peak - 100 to time of peak + 300 kind of randomly chosen by Ashley. Also learned wehen time of discovery is classified (statistically significant detection) occurs when your $\frac{value}{sigma} >3$. So for example, if your value was $100$ and $\sigma = 20$, that is 'statistically significant'. This is called '3 sigma' detection. 
+
+\section{6/22}
+I started fitting the red filters and got NaN errors. Eventually, we figured out it was from the fluxequation sometimes returning NaN. So instead of just returning, we know use numpy's nan to num function and the issue was fixed. I also derped with the priors. I didn't set them properly because I needed more parenthesis to cover all the conditional statements. Also, log uniform (aka reciprocal distribution) means you pick a number from the uniform $\log a$ to $\log b$ then take $e^{number}$. So you can set the prior easily as $\log a < \log {var} < \log b$. I showed the fit and corner plots which started looking weird after the priors were fixed. You should try not to shorten the burn-in time too much because it might create an island. You can always check this by plotting a single walker for a variable vs steps and it should be a noisy horizontal line. 
+
+\section{6/23}
+The walkers plot/corner plot looked a little weird but Ashley suspected it was because this data set was sparse so we moved on even though the fit looked fine. Now I have to try to fit the r and g bands simultaneously but, knowing they are correlated, have to try to fit for a correlation factor. So now, I'm supposed to fit for the r filters variable and, at the same time, look at the green data and try to fit the blue data according to a correlation factor which, when multiplied, by the r filter variable can get the green filter's variable. To explain further: if there is $ampltiude_{red}$ and an $amplitude_{green}$, we fit for $ampltidue_{red}$ and a scaling parameter $a_{scale}$ such that $ampltiude_{green} = amplitude_{red} * a_{scale}$. You are supposed to simultaneously fit for $amplitude_{green}$ and $amplitude_{red}$ through the scaling variable. You also set a gaussian prior on the scaling variable that has to be around 1. The difference between directly fitting for $amplitude_{green}$ and $amplitude_{red}$ individually is that by tying them together with a variable. This might get a worse fit but we will go to a hierarchical model if it doesn't work.  
+
+\section{6/26}
+I tried to fit the red and green bands simultaneously but I messed up and ended up doing them consecutively instead of together. Instead of fitting for red band variables then fitting for green band variables, you want the two bands to be able to 'communicate' with each other and share info so you fit for them at the same time. But basically, you take the red and green bands, pass them into the appropriate priors, then use two separate models to calculate to likelihoods and sum everything up in the probability function. So instead of $\text{log likelihood} = P(\text{green point one}) * P(\text{green point two})...$, we have $\text{likelihood} = P(\text{green point one}) * P(\text{red point one})...$
+
+We had a meeting and discussed line by line the code in main2.py and I explained what it was supposed to do. MCMC assumes each data point has a gaussian error (which is why its the log of the normal distribution) and $s_n$ (the added scatter varaible) is an assumption that the data underestimates error so you add some on. I did the log uniform prior for amplitude wrong so I need to fix that. I did $\ln$ instead of $\log$ in the amplitude prior as well. Marshall recommended to write more clear structure for accesing the $\text{flux\_vars}$ array \href{https://stackoverflow.com/questions/35988/c-like-structures-in-python}{using this website}. I need to expand to the other bands and other variables (because I set some to constants to make it easier to code). All variables except $s_n$ and $t_0$ need to be scaled. $s_n$ will be independent for the bands and $t_0$ will be the same for all bands. I can set the $s_n$ prior range to be from $0$ to $3 * \sigma_{y_{errors}}$. I can start writing the introduction of our paper largely following Nathan Sander's introduction because we are just expanding on his work. She also said that what's new is not the amount of new SN but just a larger amount of classified type 2 SN so we have much more data. I also need to start reading some more papers to learn literature. 
+
+\section{6/30}
+Problem: When the MCMC isn't changing/the walker plots shows horizontal lines and the values aren't changing, it likely means a prior is wrong and always returning infinity or a initial value is out of the prior. I fixed the log uniform prior by making the variable sample in log and then the prior in uniform. I added a $10 ^{\text{amplitude}}$ to a lot of places. I added a scale\_variables function that can scale the flux\_equation variables between bands. I finished fitting to all bands. 
+
+\section{7/4}
+We aren't sure if we should change the scale priors to something other than $N(0, 0.5)$ for now. Since the fits are done, we need to check them with the Sanders paper. He uses a different model so we plan to fit to the same LC using the different models and see how close the fits are. The LC names were slightly confusing because they needed to be converted from ps1 to psc data. The griz(y) filters are literally different filters on a telescope designed to pick up different wavelengths. \href{http://svo2.cab.inta-csic.es/svo/theory/fps3/index.php?mode=browse&gname=PAN-STARRS&asttype=}{This website} shows a cool picture demonstrating this. We don't use 'y' band data because the atmosphere disrupts the red (which is where the y band wavelength is) so you can't really see anything. Filter, band, and bandpass are synonymous. 
+
+\section{7/11}
+Sander's paper ended up being quite weird and not that easy to fit to. I tried to match up my model to his model to see how well we did but I couldn't manage to make his model to work. I had a meeting with Ashley where we discussed several issues:
+\begin{enumerate} 
+        \item Why did he ignore large errobars. The errorbars for some points were very large and they were usually for points near 0 flux. Our model uses all the points regardless of the size of the error
+        \item You can fit to the few amount of little points, get the parameters for the model fit, then make up a time range to plot to see the entire LC
+        \item Absolute magnitude is putting at a specified distance (10 parsecs) and seeing how bright it would be
+        \item Flux is the number of photons seen. AB magnitude is another scale and it equals the $-2.5\log(\text{flux}) + m'$ where m' is called the zeropoint. It's just something added for the conversion from flux to magnitude. It can vary from different defintions of flux. The reason for conversion is because flux, the amount of photons you detect, could depend also on how efficient your CCD is. The zeropoint tries to compensate for these factors 
+        \item To see if your burn-in time is long enough, you can plot a few plots of one walker for a parameter. You check to make sure it looks like it's moving a lot and not moving in one direction. Then you can adjust the burn-in time accordingly. The thinning you can try to play around looking at the autocorrelation time using get\_autocorr\_time(). Usually a larger time is better
+        \item In the past to try to correlate fits between filters, they tried to fit each filter individually, then use the posteriors as priors into another fit and somehow they combined them together (We do something way easier)
+\end{enumerate}
+Now I need to first clean up my code a little by adding a plotting function. I need to make a plot of plateau duration vs peak luminosity using the three LC I've fit to. It's seen that longer plateau durations equate to a brighter luminosity. Look at figure 19 in sander's paper for reference. We are probably going to change to Hamiltonian monte carlo (hmc) because it's apparently faster at handling larger amount of parameters. Not sure of the exact math but apparently it uses the derivative of the $f(x)$ (model) to get more information about the posterior and make a smarter guess. This of course requires the function to be differentiable. So I need to make a new file to try to implement the HMC (I am using No-U-Turn sampler (NUTS)). I also need to start reading more papers!!
+
+\section{7/18}
+To convert from flux into luminosity. First convert to apparent magnitude. Then convert to absolute magnitude and finally convert to luminosity. \href{http://csep10.phys.utk.edu/OJTA2dev/ojta/c2c/ordinary_stars/magnitudes/absolute_tl.html}{This website has steps}. 
+
+
+\section{7/27}
+We use numpyro to implement HMC. It's syntax is different from before but it seems easier to use (just had to make everything from numpy to jax). The gamma prior was originally $\frac{2}{3} N(5, 25) + \frac{1}{3} N(60, 900)$, but numpyro doesn't allow you to add two normal distributions nor multiply distributions my a constant. So Ashley changed the prior to another log uniform from $-1$ to $3$. I thought the resulting distribution of adding the two Normals would be another Normal but instead it's a bimodal distribution. An example image can be found \href{https://upload.wikimedia.org/wikipedia/commons/thumb/b/bc/Bimodal_geological.PNG/220px-Bimodal_geological.PNG}{here}. Numpyro doesn't need a likelihood function. To find the posterior it samples from a normal, $N(\text{model}, \text{uncertainty})$ and it compares it to the observed data, $y$'s. This is the same as the likelihood part of the old model because both are gaussians but the likelihood was in log. (The model output is basically a random variable which you can describe with a mean and uncertainty). In our case, the uncertainty is $yerr^2 + s_n^2$ where $s_n$ is the scatter term. We changed the scatter prior to $N(0, 0.2)$. Numpyro doesn't give an output for the 'best fit' parameters and to see how well a model is doing you can just plot several samples from the posterior to get an idea. The model was doing fitting pretty badly and we weren't sure why.
+
+\section{7/28}
+We found out that there were a ton of divergences, based on the model summary. If the Gelman-Rubin statistic (r\_hat) is above 1, it is an indicator that the chain hasn't fully converged. All the parameters had a r\_hat of 1 though. Maybe to do better we can change the priors or add more burn in time. The effective sample size (n\_eff) is also a good indicator. If it has an extremely low value, it could be a sign that convergence has not been achieved.
+
+\section{8/1}
+Meeting where we talked about what to do next. A lot of extra burn in time helped to make the fits better. A few things I need to do/talked about during the meeting:
+\begin{itemize}
+        \item Still showed nonideal fits 
+        \item Clear up the code to make less plots 
+        \item The scatter term was too small so we made the prior bigger but it didn't seem to affect the fits much. Also don't need to include negatives because they are the same thing as positive values
+        \item Need to add fobs\_max and time\_max as arguments to the model function 
+        \item Add more times to prediction 
+        \item Try fitting with all bands to see if its better fit 
+        \item Try fitting to different data if above don't work 
+        \item Added extra chains which can help to see if your HMC is not converging/getting stuck. If all the chains have similar posterior plots, then it probably means the model is fine. Our showed similar posteriors so for some reason it just isn't finding a best fit. 
+        \item Why the mean plot isn't the best to look at - Mean isn't representative of the 'best part' of a distribution. For a right skewed plot, the mean would be off the peak so a plot of the mean values is not necessarily the best. 
+\end{itemize}
+
+
+\section{8/3}
+To do fit multiple bands, I use a \href{https://en.wikipedia.org/wiki/Truncated_normal_distribution}{truncated normal} prior for the scaling variables. It's the same as a Normal except it cuts off a part of the distribution (negative values for me). So I use a truncated normal centered at 1 with std of 0.5. Now for the fitting part, numpyro just allows you to have multiple $N(\text{model}, \text{uncertainty})$ where for each you compare to their respective $y$ values. The fits immediately became better. When reviewing the priors, I noticed that Hosseinzadeh et al. used N(0, 1) for his scatter term which is extremely small. Instead, we make it a half gaussian with a standard deviation of std(yerr). I fit all bands simultaneously and the fit turned out decent, much better than before. I also make the model sample from more times. It makes the plot look nicer and much better details. After this enhancement, the model still wasn't up to Ashley's standards, possibly meaning the model is wrong. Also a lot of the fits didn't have an extended plateau which is weird, because that is a prominent feature of the SN I'm fitting to. We double checked the equation, so it likely meant something is wrong with the fitting. 
+
+Also since numpyro uses jax as a backend, everything is defaulted to 32 bit. So I added a line to make everything in 64 bit. I also added a bunch of decimals to make sure everything was a float. With these changes, the fit still looked weird and not converging. Looking at the trace plots, it seems like several of the variables were just returning their priors. We artifically changed one of the priors to a different center and the model returned the prior which confirmed that the model wasn't optimizing. Now to figure out why the fitting isn't working... 
+
+\section{8/7}
+I changed the scaling priors from N(1, 0.5) to N(1, 1) and the fits did better and the posterior changed too. I also tried making the burnin extremely long which did a little better too, but the fits still weren't ideal. Then Ashley suggested trying to make the errobars artifically smaller by dividing by 2 which helped a lot. Then, Ashley realized that the Normal distributions in numpyro took the standard deviation not the variance. The fits immediately became much better. So now, to find a LC with less points to see if the model can fit to that. If I ran for long enough, the fits were pretty good. But looking at the posterior, some scaling variables still seemed to be returning the prior. Changing the std of the scaling distributions didn't help. 
+
+Ashley realized that the prior might be biased towards numbers bigger than 1 because the truncated normal has a mean > 1. Instead, we could try sample from N(0, 0.5) and raise that to the power of 10. So that there are no negatives and it wouldn't be biased. 
+
+
+\section{8/8}
+
+
+\iffalse
+--- TODO --- 
+4. start overleaf paper
+5. read papers
+
+--- QUESTIONS --- 
+1. This represents the
+first such population analysis of SN IIP light curves based on
+a homogeneously collected and multiband photometric sample
+from a wide-field optical survey.
+2. ask her to check HMC code. so i don't need to check priors? 
+3. look at that thing that could factor in length of errorbars?
+
+PS1_PS1MD_PSc300221 - [3.42247193e+00 6.25209953e-03 1.01249482e+02 5.57900111e+04
+ 1.62121691e+00 8.25907364e+00 1.98597727e+01 1.07902194e+00
+ 1.68048075e+00 8.39108685e-02 5.83079075e-01 4.88315798e+00
+ 1.14547373e+01 9.27766360e-01 7.58041408e-01 1.66775590e+00
+ 1.03414004e-01 1.95458827e+00 1.46935468e+01 1.51902519e+00
+ 7.04900405e-01 5.26894826e-01 1.60550206e+00 1.85911235e+00
+ 1.68081424e+01]
+peak - 2507.291
+
+PS1_PS1MD_PSc370330 - [2.35868890e+00 9.53625060e-03 6.02489096e+01 5.60017079e+04
+ 2.44973004e+00 1.85349250e+01 1.99213041e+01 8.77791066e-01
+ 2.53059532e+00 1.67951175e-01 7.20424777e-01 7.49278032e-01
+ 5.26359691e+00 1.13957948e+00 4.02774089e-01 3.88159799e-01
+ 8.95045769e-01 1.22790101e+00 9.16480830e-01 5.30072593e-01
+ 6.02943187e-01 1.12909509e+00 1.10636527e+00 9.92693930e-01
+ 5.07508188e+00]
+peak - 263.779
+
+PS1_PS1MD_PSc150692 - [2.73975205e+00 7.11037738e-03 5.36919262e+01 5.56643034e+04
+ 1.23144283e-01 4.58062745e+01 2.87001470e+00 1.24607835e+00
+ 1.99338413e+00 1.21882222e+00 1.16688647e+00 9.98817439e-01
+ 7.69950735e-01 1.11262559e+00 2.17495679e-01 1.54132370e+00
+ 9.97520058e-01 1.69133575e+00 2.29494555e+00 4.48396812e-01
+ 1.45044465e+00 1.54324478e+00 7.72397198e-01 7.28355618e-01
+ 7.41748744e+00]
+peak - 525.747
+
+PS1_PS1MD_PSc010163 -[2.62956332e+00 9.42788484e-03 5.77556664e+01 5.52399199e+04
+ 9.10551652e-01 2.23113683e+01 4.82324181e+00 1.13620887e+00
+ 1.70202928e+00 7.19526368e-01 9.85439384e-01 7.61136406e-01
+ 5.15873189e+00 9.62893941e-01 3.02976176e-02 8.11209839e-01
+ 1.12184925e+00 1.06968617e+00 8.85404919e+00 1.04817520e+00
+ 1.24355482e+00 8.90993555e-01 1.22555628e+00 1.41738089e+00
+ 4.86227042e+00]
+peak - 416.771
+
+
+y = np.array([263.779, 525.747, 416.771, 166.141])
+plt.plot([6.02489096e+01, 5.36919262e+01, 5.77556664e+01, 6.02489096e+01 * 2.53059532e+00],
+             y, 'o')
+
+
+Make new latex document about papers: 
+https://iopscience.iop.org/article/10.1088/0004-637X/799/2/208/pdf
+https://arxiv.org/pdf/1809.06379.pdf
+https://iopscience.iop.org/article/10.1088/0004-637X/814/1/63/pdf
+https://iopscience.iop.org/article/10.3847/1538-4357/aa6251
+https://arxiv.org/pdf/1404.3619.pdf
+https://arxiv.org/pdf/2008.04912.pdf 
+\fi 
+\end{document}
