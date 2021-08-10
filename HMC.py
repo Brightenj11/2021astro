@@ -52,64 +52,66 @@ def flux_equation(time, amplitude, beta, gamma, t0, tau_rise, tau_fall):
                           (1. + jnp.exp(-(time - t0) / tau_rise)))
 
 
-def model(x, x2, x3, x4, y=None, y2=None, y3=None, y4=None, yerr=None, yerr2=None, yerr3=None, yerr4=None,
+def model(x1, x2, x3, x4, y1=None, y2=None, y3=None, y4=None, yerr1=None, yerr2=None, yerr3=None, yerr4=None,
           fobs_max=200., time_max=56000.):
     # R band
-    log_amplitude = numpyro.sample('log_amplitude', dist.Uniform(jnp.log10(1.), jnp.log10(100. * fobs_max)))
-    beta = numpyro.sample('beta', dist.Uniform(0., 0.01))
-    log_gamma = numpyro.sample('log_gamma', dist.Uniform(-1., 3.))
-    t0 = numpyro.sample('t0', dist.Uniform(time_max - 50., time_max + 300.))
-    tau_rise = numpyro.sample('tau_rise', dist.Uniform(0.01, 50.))
-    tau_fall = numpyro.sample('tau_fall', dist.Uniform(1., 300.))
-    s_n = numpyro.sample('s_n', dist.HalfNormal(jnp.std(yerr)))
+    r_amp = numpyro.sample('r_amp', dist.Uniform(jnp.log10(1.), jnp.log10(100. * fobs_max)))  # Log Amplitude
+    r_beta = numpyro.sample('r_beta', dist.Uniform(0., 0.01))  # Plateau Slope
+    r_gamma = numpyro.sample('r_gamma', dist.Uniform(-1., 3.))  # Log Plateau Duration
+    t0 = numpyro.sample('t0', dist.Uniform(time_max - 50., time_max + 300.))  # Reference Epoch
+    r_tr = numpyro.sample('r_tr', dist.Uniform(0.01, 50.))  # Rise Time
+    r_tf = numpyro.sample('r_tf', dist.Uniform(1., 300.))  # Fall time
+    r_sn = numpyro.sample('r_sn', dist.HalfNormal(jnp.std(yerr1)))  # Intrinsic Scatter
 
     # Sample G band
-    scale_a = numpyro.sample('scale_a', dist.TruncatedNormal(0., 1., 2.))
-    scale_b = numpyro.sample('scale_b', dist.TruncatedNormal(0., 1., 2.))
-    scale_g = numpyro.sample('scale_g', dist.TruncatedNormal(0., 1., 2.))
-    scale_tr = numpyro.sample('scale_tr', dist.TruncatedNormal(0., 1., 2.))
-    scale_tf = numpyro.sample('scale_tf', dist.TruncatedNormal(0., 1., 2.))
-
+    g_scale_a = numpyro.sample('g_scale_a', dist.TruncatedDistribution(base_dist=dist.Normal(0., 0.25), low=None,
+                                                                       high=jnp.log10(2)))
+    g_scale_b = numpyro.sample('g_scale_b', dist.Normal(0., 0.25))
+    g_scale_g = numpyro.sample('g_scale_g', dist.Normal(0., 0.25))
+    g_scale_tr = numpyro.sample('g_scale_tr', dist.Normal(0., 0.25))
+    g_scale_tf = numpyro.sample('g_scale_tf', dist.Normal(0., 0.25))
     g_sn = numpyro.sample('g_sn', dist.HalfNormal(jnp.std(yerr2)))
-    # Scale G band
 
-    g_amp = log_amplitude + jnp.log10(scale_a)
-    g_beta = beta * scale_b
-    g_gamma = log_gamma + jnp.log10(scale_g)
-    g_tr = tau_rise * scale_tr
-    g_tf = tau_fall * scale_tf
+    # Scale G band
+    g_amp = r_amp + g_scale_a
+    g_beta = r_beta * 10. ** g_scale_b
+    g_gamma = r_gamma + g_scale_g
+    g_tr = r_tr * 10. ** g_scale_tr
+    g_tf = r_tf * 10. ** g_scale_tf
 
     # I band
-    i_scale_a = numpyro.sample('i_scale_a', dist.TruncatedNormal(0., 1., 1.))
-    i_scale_b = numpyro.sample('i_scale_b', dist.TruncatedNormal(0., 1., 1.))
-    i_scale_g = numpyro.sample('i_scale_g', dist.TruncatedNormal(0., 1., 1.))
-    i_scale_tr = numpyro.sample('i_scale_tr', dist.TruncatedNormal(0., 1., 1.))
-    i_scale_tf = numpyro.sample('i_scale_tf', dist.TruncatedNormal(0., 1., 1.))
+    i_scale_a = numpyro.sample('i_scale_a', dist.TruncatedDistribution(base_dist=dist.Normal(0., 0.25), low=None,
+                                                                       high=jnp.log10(2)))
+    i_scale_b = numpyro.sample('i_scale_b', dist.Normal(0., 0.25))
+    i_scale_g = numpyro.sample('i_scale_g', dist.Normal(0., 0.25))
+    i_scale_tr = numpyro.sample('i_scale_tr', dist.Normal(0., 0.25))
+    i_scale_tf = numpyro.sample('i_scale_tf', dist.Normal(0., 0.25))
     i_sn = numpyro.sample('i_sn', dist.HalfNormal(jnp.std(yerr3)))
 
-    i_amp = log_amplitude + jnp.log10(i_scale_a)
-    i_beta = beta * i_scale_b
-    i_gamma = log_gamma + jnp.log10(i_scale_g)
-    i_tr = tau_rise * i_scale_tr
-    i_tf = tau_fall * i_scale_tf
+    i_amp = r_amp + i_scale_a
+    i_beta = r_beta * 10. ** i_scale_b
+    i_gamma = r_gamma + i_scale_a
+    i_tr = r_tr * 10. ** i_scale_tr
+    i_tf = r_tf * 10. ** i_scale_tf
 
     # Z band
-    z_scale_a = numpyro.sample('z_scale_a', dist.TruncatedNormal(0., 1., 1.))
-    z_scale_b = numpyro.sample('z_scale_b', dist.TruncatedNormal(0., 1., 1.))
-    z_scale_g = numpyro.sample('z_scale_g', dist.TruncatedNormal(0., 1., 1.))
-    z_scale_tr = numpyro.sample('z_scale_tr', dist.TruncatedNormal(0., 1., 1.))
-    z_scale_tf = numpyro.sample('z_scale_tf', dist.TruncatedNormal(0., 1., 1.))
+    z_scale_a = numpyro.sample('z_scale_a', dist.TruncatedDistribution(base_dist=dist.Normal(0., 0.25), low=None,
+                                                                       high=jnp.log10(2)))
+    z_scale_b = numpyro.sample('z_scale_b', dist.Normal(0., 0.25))
+    z_scale_g = numpyro.sample('z_scale_g', dist.Normal(0., 0.25))
+    z_scale_tr = numpyro.sample('z_scale_tr', dist.Normal(0., 0.25))
+    z_scale_tf = numpyro.sample('z_scale_tf', dist.Normal(0., 0.25))
     z_sn = numpyro.sample('z_sn', dist.HalfNormal(jnp.std(yerr4)))
 
-    z_amp = i_amp + jnp.log10(z_scale_a)
-    z_beta = i_beta * z_scale_b
-    z_gamma = i_gamma + jnp.log10(z_scale_g)
-    z_tr = i_tr * z_scale_tr
-    z_tf = i_tf * z_scale_tf
+    z_amp = i_amp + z_scale_a
+    z_beta = i_beta * 10. ** z_scale_b
+    z_gamma = i_gamma + z_scale_g
+    z_tr = i_tr * 10. ** z_scale_tr
+    z_tf = i_tf * 10. ** z_scale_tf
 
     # Calculate flux values
-    flux_eq = numpyro.deterministic('flux_eq', flux_equation(x, 10. ** log_amplitude, beta, 10. ** log_gamma, t0,
-                                                             tau_rise, tau_fall))
+    flux_eq_r = numpyro.deterministic('flux_eq_r', flux_equation(x1, 10. ** r_amp, r_beta, 10. ** r_gamma, t0,
+                                                                 r_tr, r_tf))
     flux_eq_g = numpyro.deterministic('flux_eq_g', flux_equation(x2, 10. ** g_amp, g_beta, 10. ** g_gamma, t0,
                                                                  g_tr, g_tf))
     flux_eq_i = numpyro.deterministic('flux_eq_i', flux_equation(x3, 10. ** i_amp, i_beta, 10. ** i_gamma, t0,
@@ -117,8 +119,8 @@ def model(x, x2, x3, x4, y=None, y2=None, y3=None, y4=None, yerr=None, yerr2=Non
     flux_eq_z = numpyro.deterministic('flux_eq_z', flux_equation(x4, 10. ** z_amp, z_beta, 10. ** z_gamma, t0,
                                                                  z_tr, z_tf))
 
-    if y is not None and yerr is not None:
-        numpyro.sample('obs', dist.Normal(flux_eq, jnp.sqrt(yerr ** 2. + s_n ** 2.)), obs=y)
+    if y1 is not None and yerr1 is not None:
+        numpyro.sample('obs1', dist.Normal(flux_eq_r, jnp.sqrt(yerr1 ** 2. + r_sn ** 2.)), obs=y1)
         numpyro.sample('obs2', dist.Normal(flux_eq_g, jnp.sqrt(yerr2 ** 2. + g_sn ** 2.)), obs=y2)
         numpyro.sample('obs3', dist.Normal(flux_eq_i, jnp.sqrt(yerr3 ** 2. + i_sn ** 2.)), obs=y3)
         numpyro.sample('obs4', dist.Normal(flux_eq_z, jnp.sqrt(yerr4 ** 2. + z_sn ** 2.)), obs=y4)
@@ -147,16 +149,16 @@ if __name__ == '__main__':
     rng_key, rng_key_ = random.split(rng_key)
     kernel = NUTS(model)
 
-    mcmc = MCMC(kernel, num_warmup=800, num_samples=200, thinning=1, num_chains=2)
-    mcmc.run(rng_key_, x=xr, x2=xg, x3=xi, x4=xz, y=yr, y2=yg, y3=yi, y4=yz, yerr=yerr_r, yerr2=yerr_g, yerr3=yerr_i,
+    mcmc = MCMC(kernel, num_warmup=50000, num_samples=10000, thinning=1, num_chains=2)
+    mcmc.run(rng_key_, x1=xr, x2=xg, x3=xi, x4=xz, y1=yr, y2=yg, y3=yi, y4=yz, yerr1=yerr_r, yerr2=yerr_g, yerr3=yerr_i,
              yerr4=yerr_z, fobs_max=np.max(yr), time_max=xr[np.argmax(yr)])
     mcmc.print_summary()
     samples = mcmc.get_samples()
 
     # Plot sampling
     ds = az.from_numpyro(mcmc)
-    labels = ["log_amplitude", "beta", "log_gamma", "t0", "tau_rise", "tau_fall", "s_n", "scale_a", "scale_b",
-              "scale_g", "scale_tr", "scale_tf", "g_sn", "i_scale_a", "i_scale_b", "i_scale_g", "i_scale_tr",
+    labels = ["r_amp", "r_beta", "r_gamma", "t0", "r_tr", "r_tf", "r_sn", "g_scale_a", "g_scale_b",
+              "g_scale_g", "g_scale_tr", "g_scale_tf", "g_sn", "i_scale_a", "i_scale_b", "i_scale_g", "i_scale_tr",
               "i_scale_tf", "i_sn", "z_scale_a", "z_scale_b", "z_scale_g", "z_scale_tr", "z_scale_tf", "z_sn"]
     # az.plot_pair(ds, var_names=labels, divergences=True)
     # plt.show()
@@ -177,13 +179,13 @@ if __name__ == '__main__':
 
     t = np.linspace(np.min(xr), np.max(xr), 3000)
     predictive = Predictive(model, posterior_samples=samples)
-    predictions = predictive(rng_key_, x=t, x2=t, x3=t, x4=t, yerr=yerr_r, yerr2=yerr_g, yerr3=yerr_i, yerr4=yerr_z,
+    predictions = predictive(rng_key_, x1=t, x2=t, x3=t, x4=t, yerr1=yerr_r, yerr2=yerr_g, yerr3=yerr_i, yerr4=yerr_z,
                              fobs_max=np.max(yr), time_max=xr[np.argmax(yr)])
 
     # Plot first few samples
     n_samples = 50
     plt.scatter(xr, yr, color='r')
-    plt.plot(xr, ds.posterior.flux_eq[0, :n_samples].T, color='r', alpha=0.1)
+    plt.plot(xr, ds.posterior.flux_eq_r[0, :n_samples].T, color='r', alpha=0.1)
 
     plt.scatter(xg, yg, color='g')
     plt.plot(xg, ds.posterior.flux_eq_g[0, :n_samples].T, color='g', alpha=0.1)
@@ -199,7 +201,7 @@ if __name__ == '__main__':
     # Plot sample with extra times using Prediction
     plt.scatter(xr, yr, color='r')
     for i in range(n_samples):
-        plt.plot(t, predictions['flux_eq'][i], color='r', alpha=0.1)
+        plt.plot(t, predictions['flux_eq_r'][i], color='r', alpha=0.1)
 
     plt.scatter(xg, yg, color='g')
     for i in range(n_samples):
