@@ -1,3 +1,4 @@
+import os
 import numpyro
 import numpyro.distributions as dist
 import numpy as np
@@ -5,9 +6,9 @@ from numpyro.infer import NUTS, MCMC, Predictive
 from jax import random
 import jax.numpy as jnp
 from jax.config import config
-config.update("jax_enable_x64", True)
 import arviz as az
 import matplotlib.pyplot as plt
+config.update("jax_enable_x64", True)
 
 
 def read_data(filter_name, filename: str = 'PS1_PS1MD_PSc370330.snana.dat'):
@@ -18,8 +19,8 @@ def read_data(filter_name, filename: str = 'PS1_PS1MD_PSc370330.snana.dat'):
     :param filename:
     :return: times (x), flux values (y), and flux errors (yerr)
     """
-    data = np.genfromtxt(filename, dtype=None, skip_header=17, skip_footer=1, usecols=(1, 2, 4, 5),
-                         encoding=None)
+    data = np.genfromtxt(os.getcwd() + '/ps1_sne_zenodo/ps1_sne_zenodo/' + filename, dtype=None, skip_header=17,
+                         skip_footer=1, usecols=(1, 2, 4, 5), encoding=None)
 
     x = list()
     y = list()
@@ -90,7 +91,7 @@ def model(x1, x2, x3, x4, y1=None, y2=None, y3=None, y4=None, yerr1=None, yerr2=
 
     i_amp = r_amp + i_scale_a
     i_beta = r_beta * 10. ** i_scale_b
-    i_gamma = r_gamma + i_scale_a
+    i_gamma = r_gamma + i_scale_g
     i_tr = r_tr * 10. ** i_scale_tr
     i_tf = r_tf * 10. ** i_scale_tf
 
@@ -128,99 +129,105 @@ def model(x1, x2, x3, x4, y1=None, y2=None, y3=None, y4=None, yerr1=None, yerr2=
 
 if __name__ == '__main__':
     # Get data
-    # file_name = 'PS1_PS1MD_PSc370330.snana.dat'
-    # file_name = 'PS1_PS1MD_PSc010163.snana.dat'
-    file_name = 'PS1_PS1MD_PSc000001.snana.dat'
+    number = '330064'
+    file_name = 'PS1_PS1MD_PSc' + number + '.snana.dat'
+    to_plot = False
     xr, yr, yerr_r = read_data('r', filename=file_name)
     xg, yg, yerr_g = read_data('g', filename=file_name)
     xi, yi, yerr_i = read_data('i', filename=file_name)
     xz, yz, yerr_z = read_data('z', filename=file_name)
-
-    # Plot data
-    plt.scatter(xr, yr, color='r', label='R band')
-    plt.scatter(xg, yg, color='g', label='G Band')
-    plt.scatter(xi, yi, color='b', label='I band')
-    plt.scatter(xz, yz, color='y', label='Z band')
-    plt.legend()
-    plt.show()
 
     # Run NUTS
     rng_key = random.PRNGKey(0)
     rng_key, rng_key_ = random.split(rng_key)
     kernel = NUTS(model)
 
-    mcmc = MCMC(kernel, num_warmup=50000, num_samples=10000, thinning=1, num_chains=2)
+    mcmc = MCMC(kernel, num_warmup=80000, num_samples=10000, thinning=1, num_chains=1)
     mcmc.run(rng_key_, x1=xr, x2=xg, x3=xi, x4=xz, y1=yr, y2=yg, y3=yi, y4=yz, yerr1=yerr_r, yerr2=yerr_g, yerr3=yerr_i,
              yerr4=yerr_z, fobs_max=np.max(yr), time_max=xr[np.argmax(yr)])
     mcmc.print_summary()
     samples = mcmc.get_samples()
-
-    # Plot sampling
     ds = az.from_numpyro(mcmc)
-    labels = ["r_amp", "r_beta", "r_gamma", "t0", "r_tr", "r_tf", "r_sn", "g_scale_a", "g_scale_b",
-              "g_scale_g", "g_scale_tr", "g_scale_tf", "g_sn", "i_scale_a", "i_scale_b", "i_scale_g", "i_scale_tr",
-              "i_scale_tf", "i_sn", "z_scale_a", "z_scale_b", "z_scale_g", "z_scale_tr", "z_scale_tf", "z_sn"]
-    # az.plot_pair(ds, var_names=labels, divergences=True)
-    # plt.show()
+    if to_plot:
+        # Plot data
+        plt.scatter(xr, yr, color='r', label='R band')
+        plt.scatter(xg, yg, color='g', label='G Band')
+        plt.scatter(xi, yi, color='b', label='I band')
+        plt.scatter(xz, yz, color='y', label='Z band')
+        plt.legend()
+        plt.show()
 
-    # Plot trace
-    # print(ds.sample_stats['diverging'])
-    az.rcParams['plot.max_subplots'] = 100
-    az.rcParams.update()
-    az.plot_trace(ds.posterior)
-    plt.show()
+        # Plot sampling
+        labels = ["r_amp", "r_beta", "r_gamma", "t0", "r_tr", "r_tf", "r_sn", "g_scale_a", "g_scale_b",
+                  "g_scale_g", "g_scale_tr", "g_scale_tf", "g_sn", "i_scale_a", "i_scale_b", "i_scale_g", "i_scale_tr",
+                  "i_scale_tf", "i_sn", "z_scale_a", "z_scale_b", "z_scale_g", "z_scale_tr", "z_scale_tf", "z_sn"]
+        # az.plot_pair(ds, var_names=labels, divergences=True)
+        # plt.show()
 
-    # Plot variable densities
-    az.plot_posterior(ds.posterior, var_names=labels)
-    plt.show()
+        # Plot trace
+        # print(ds.sample_stats['diverging'])
+        az.rcParams['plot.max_subplots'] = 100
+        az.rcParams.update()
+        az.plot_trace(ds.posterior)
+        plt.show()
 
-    # Plot random samples
-    rng_key, rng_key_ = random.split(rng_key)
+        # Plot variable densities
+        az.plot_posterior(ds.posterior, var_names=labels)
+        plt.show()
 
-    t = np.linspace(np.min(xr), np.max(xr), 3000)
-    predictive = Predictive(model, posterior_samples=samples)
-    predictions = predictive(rng_key_, x1=t, x2=t, x3=t, x4=t, yerr1=yerr_r, yerr2=yerr_g, yerr3=yerr_i, yerr4=yerr_z,
-                             fobs_max=np.max(yr), time_max=xr[np.argmax(yr)])
+        # Predict random samples
+        rng_key, rng_key_ = random.split(rng_key)
 
-    # Plot first few samples
-    n_samples = 50
-    plt.scatter(xr, yr, color='r')
-    plt.plot(xr, ds.posterior.flux_eq_r[0, :n_samples].T, color='r', alpha=0.1)
+        t = np.linspace(np.min(xr), np.max(xr), 3000)
+        predictive = Predictive(model, posterior_samples=samples)
+        predictions = predictive(rng_key_, x1=t, x2=t, x3=t, x4=t, yerr1=yerr_r, yerr2=yerr_g, yerr3=yerr_i,
+                                 yerr4=yerr_z, fobs_max=np.max(yr), time_max=xr[np.argmax(yr)])
 
-    plt.scatter(xg, yg, color='g')
-    plt.plot(xg, ds.posterior.flux_eq_g[0, :n_samples].T, color='g', alpha=0.1)
+        # Plot first few samples
+        n_samples = 50
+        plt.scatter(xr, yr, color='r')
+        plt.plot(xr, ds.posterior.flux_eq_r[0, :n_samples].T, color='r', alpha=0.1)
 
-    plt.scatter(xi, yi, color='b')
-    plt.plot(xi, ds.posterior.flux_eq_i[0, :n_samples].T, color='b', alpha=0.1)
+        plt.scatter(xg, yg, color='g')
+        plt.plot(xg, ds.posterior.flux_eq_g[0, :n_samples].T, color='g', alpha=0.1)
 
-    plt.scatter(xz, yz, color='y')
-    plt.plot(xz, ds.posterior.flux_eq_z[0, :n_samples].T, color='y', alpha=0.1)
-    plt.xlim([xr[np.argmax(yr)] - 100, xr[np.argmax(yr)] + 100])
-    plt.show()
+        plt.scatter(xi, yi, color='b')
+        plt.plot(xi, ds.posterior.flux_eq_i[0, :n_samples].T, color='b', alpha=0.1)
 
-    # Plot sample with extra times using Prediction
-    plt.scatter(xr, yr, color='r')
-    for i in range(n_samples):
-        plt.plot(t, predictions['flux_eq_r'][i], color='r', alpha=0.1)
+        plt.scatter(xz, yz, color='y')
+        plt.plot(xz, ds.posterior.flux_eq_z[0, :n_samples].T, color='y', alpha=0.1)
+        plt.xlim([xr[np.argmax(yr)] - 100, xr[np.argmax(yr)] + 100])
+        plt.show()
 
-    plt.scatter(xg, yg, color='g')
-    for i in range(n_samples):
-        plt.plot(t, predictions['flux_eq_g'][i], color='g', alpha=0.1)
+        # Plot sample with extra times using Prediction
+        plt.scatter(xr, yr, color='r')
+        for i in range(n_samples):
+            plt.plot(t, predictions['flux_eq_r'][i], color='r', alpha=0.1)
 
-    plt.scatter(xi, yi, color='b')
-    for i in range(n_samples):
-        plt.plot(t, predictions['flux_eq_i'][i], color='b', alpha=0.1)
+        plt.scatter(xg, yg, color='g')
+        for i in range(n_samples):
+            plt.plot(t, predictions['flux_eq_g'][i], color='g', alpha=0.1)
 
-    plt.scatter(xz, yz, color='y')
-    for i in range(n_samples):
-        plt.plot(t, predictions['flux_eq_z'][i], color='y', alpha=0.1)
-    plt.xlim([xr[np.argmax(yr)] - 100, xr[np.argmax(yr)] + 100])
-    plt.show()
-    '''
-    # Plot means
-    plt.scatter(xr, yr)
-    plt.plot(xr, flux_equation(xr, 10 ** jnp.mean(samples['log_amplitude']), jnp.mean(samples['beta']),
-                               10. ** jnp.mean(samples['log_gamma']),
-                               jnp.mean(samples['t0']), jnp.mean(samples['tau_rise']), jnp.mean(samples['tau_fall'])))
-    plt.show()
-    '''
+        plt.scatter(xi, yi, color='b')
+        for i in range(n_samples):
+            plt.plot(t, predictions['flux_eq_i'][i], color='b', alpha=0.1)
+
+        plt.scatter(xz, yz, color='y')
+        for i in range(n_samples):
+            plt.plot(t, predictions['flux_eq_z'][i], color='y', alpha=0.1)
+        plt.xlim([xr[np.argmax(yr)] - 100, xr[np.argmax(yr)] + 100])
+        plt.show()
+
+    np.savez(number+'.npz', r_amp=ds.posterior.r_amp, r_beta=ds.posterior.r_beta, r_gamma=ds.posterior.r_gamma,
+             t0=ds.posterior.t0, r_tr=ds.posterior.r_tr, r_tf=ds.posterior.r_tf, r_sn=ds.posterior.r_sn,
+             g_scale_a=ds.posterior.g_scale_a, g_scale_b=ds.posterior.g_scale_b, g_scale_g=ds.posterior.g_scale_g,
+             g_scale_tr=ds.posterior.g_scale_tr, g_scale_tf=ds.posterior.g_scale_tf, g_sn=ds.posterior.g_sn,
+             i_scale_a=ds.posterior.i_scale_a, i_scale_b=ds.posterior.i_scale_b, i_scale_g=ds.posterior.i_scale_g,
+             i_scale_tr=ds.posterior.i_scale_tr, i_scale_tf=ds.posterior.i_scale_tf, i_sn=ds.posterior.i_sn,
+             z_scale_a=ds.posterior.z_scale_a, z_scale_b=ds.posterior.z_scale_b, z_scale_g=ds.posterior.z_scale_g,
+             z_scale_tr=ds.posterior.z_scale_tr, z_scale_tf=ds.posterior.z_scale_tf, z_sn=ds.posterior.z_sn)
+
+    # with np.load('000001.npz') as data:
+    #    a = data['r_amp']
+    #    b = data['r_beta']
+    #    g = data['r_gamma']
