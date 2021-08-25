@@ -4,9 +4,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def read_data(filename: str = 'PS1_PS1MD_PSc370330.snana.dat'):
+def read_data(filter_name, filename: str = 'PS1_PS1MD_PSc370330.snana.dat'):
     """
     General function to read .snana.dat files
+    :param filter_name: Gets data from this filter character
     :param filename:
     :return: times (x), flux values (y), and flux errors (yerr)
     """
@@ -18,7 +19,7 @@ def read_data(filename: str = 'PS1_PS1MD_PSc370330.snana.dat'):
     yerr = list()
 
     for entree in data:
-        if entree[1] == 'r':
+        if entree[1] == filter_name:
             x.append(entree[0])
             y.append(entree[2])
             yerr.append(entree[3])
@@ -86,16 +87,12 @@ def log_prior(flux_vars, fobs_max):
     amplitude, beta, gamma, t0, tau_rise, tau_fall, s_n = flux_vars
 
     # Uniform Priors
-    if not np.log(1) < np.log(amplitude) < np.log(100 * fobs_max) and \
-            0 < beta < 0.01 and \
-            0 < gamma and \
-            xs[np.where(ys == np.max(ys))][0] - 100 < t0 < xs[np.where(ys == np.max(ys))][0] + 300 and \
-            0.01 < tau_rise < 50 and \
-            1 < tau_fall < 300 and \
-            0 < s_n < 100:
-        return -np.inf
-
-    if gamma < 0:
+    if not ((np.log(1) < np.log(amplitude)) and (np.log(amplitude) < np.log(100 * fobs_max)) and
+            (0 < beta) and (beta < 0.01) and (0 < gamma) and
+            (xs[np.argmax(ys)] - 100 < t0) and (t0 < xs[np.argmax(ys)] + 300) and
+            (0.01 < tau_rise) and (tau_rise < 50) and
+            (1 < tau_fall) and (tau_fall < 300) and
+            (0 < s_n) and (s_n < 100)):
         return -np.inf
 
     # Gaussian Prior for plateau duration (gamma)
@@ -128,7 +125,7 @@ def mcmc(x, y, yerr):
     """
     # Set number of dimensions, walkers, and initial position
     num_dim, num_walkers = 7, 150
-    p0 = [200, 0.005, 100, xs[np.where(ys == np.max(ys))][0], 5, 10, 20]
+    p0 = [200, 0.001, 100, xs[np.argmax(ys)], 5, 10, 20]
     pos = [p0 + 1e-4 * np.random.randn(num_dim) for i in range(num_walkers)]
 
     # Run MCMC
@@ -159,7 +156,7 @@ def mcmc(x, y, yerr):
     axes[-1].set_xlabel("Step Number")
     plt.show()
 
-    print(sampler.get_chain()[:, 0:, 2][:, 0].shape)
+    # Plot Single Walker
     plt.plot(sampler.get_chain()[:, 0:, 2][:, 0])
     plt.figure()
 
@@ -199,11 +196,11 @@ def mcmc(x, y, yerr):
     '''
 
 
-def fit_red(x, y, yerr):
+def fit_color(x, y, yerr):
     mcmc(x, y, yerr)
 
 
 if __name__ == '__main__':
-    xs, ys, yerrs = read_data()
-    fit_red(xs, ys, yerrs)
+    xs, ys, yerrs = read_data('g')
+    fit_color(xs, ys, yerrs)
 
