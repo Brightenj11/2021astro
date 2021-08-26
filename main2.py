@@ -1,3 +1,4 @@
+import os
 import corner
 import emcee
 import matplotlib.pyplot as plt
@@ -6,13 +7,14 @@ import numpy as np
 
 def read_data(filter_name, filename: str = 'PS1_PS1MD_PSc370330.snana.dat'):
     """
-    General function to read .snana.dat files
+    General function to read .snana.dat files and get specific filter data
+
     :param filter_name: Gets data from this filter character
     :param filename:
     :return: times (x), flux values (y), and flux errors (yerr)
     """
-    data = np.genfromtxt(filename, dtype=None, skip_header=17, skip_footer=1, usecols=(1, 2, 4, 5),
-                         encoding=None)
+    data = np.genfromtxt(os.getcwd() + '/ps1_sne_zenodo/' + filename, dtype=None, skip_header=17,
+                         skip_footer=1, usecols=(1, 2, 4, 5), encoding=None)
 
     x = list()
     y = list()
@@ -20,7 +22,7 @@ def read_data(filter_name, filename: str = 'PS1_PS1MD_PSc370330.snana.dat'):
 
     for entree in data:
         if entree[1] == filter_name:
-            if entree[3] < 100:
+            if entree[3] < 100.:
                 x.append(entree[0])
                 y.append(entree[2])
                 yerr.append(entree[3])
@@ -97,9 +99,9 @@ def flux_equation(time, amplitude, beta, gamma, t0, tau_rise, tau_fall):
     :return: Flux over time
     """
     # print(amplitude)
-    return np.nan_to_num(amplitude * ((1 - beta * np.minimum(time - t0, gamma)) *
+    return np.nan_to_num(amplitude * ((1. - beta * np.minimum(time - t0, gamma)) *
                          np.exp(-(np.maximum(time - t0, gamma) - gamma) / tau_fall)) /
-                         (1 + np.exp(-(time - t0) / tau_rise)))
+                         (1. + np.exp(-(time - t0) / tau_rise)))
 
 
 def sanders(t, t0, log_a, log_b1, log_b2, log_bdn, log_bdc, t1, tp, t2, td, m_p):
@@ -118,13 +120,13 @@ def sanders(t, t0, log_a, log_b1, log_b2, log_bdn, log_bdc, t1, tp, t2, td, m_p)
     if t0 < t < t0 + t1:
         return m_1 * (t / t1) ** a
     if t0 + t1 < t < t0 + t1 + tp:
-        return m_1 * np.exp(b1 * (t - t1 - t0))
+        return m_1 * np.exp(b1 * (t - t1))
     if t0 + t1 + tp < t < t0 + t1 + tp + t2:
-        return m_p * np.exp(-b1 * (t - (tp + t1 + t0)))
+        return m_p * np.exp(-b2 * (t - (tp + t1)))
     if t0 + t1 + tp + t2 < t < t0 + t1 + tp + t2 + td:
-        return m_2 * np.exp(-bdn * (t - (t2 + tp + t1 + t0)))
+        return m_2 * np.exp(-bdn * (t - (t2 + tp + t1)))
     if t0 + t1 + tp + t2 + td < t:
-        return m_d * np.exp(-bdc * (t - (td + t2 + tp + t1 + t0)))
+        return m_d * np.exp(-bdc * (t - (td + t2 + tp + t1)))
 
 
 def log_likelihood(flux_vars, x, y, yerr):
@@ -140,7 +142,7 @@ def log_likelihood(flux_vars, x, y, yerr):
     log_amplitude, beta, gamma, t0, tau_rise, tau_fall, s_n = flux_vars
 
     amplitude = 10. ** log_amplitude
-    sigma2 = s_n ** 2 + yerr ** 2
+    sigma2 = s_n ** 2. + yerr ** 2.
     return -0.5 * (np.sum((y - flux_equation(x, amplitude, beta, gamma, t0, tau_rise, tau_fall)) ** 2 / sigma2 +
                           np.log(sigma2)))
 
@@ -149,12 +151,12 @@ def log_prior(flux_vars, x, y, yerr, fobs_max):
     """Sets Priors for initial flux_vars variables"""
     log_amplitude, beta, gamma, t0, tau_rise, tau_fall, s_n = flux_vars
 
-    if not ((np.log10(1) < log_amplitude) and (log_amplitude < np.log10(100 * fobs_max)) and
-            (0 < beta) and (beta < 0.01) and (0 < gamma) and
-            (x[np.argmax(y)] - 100 < t0) and (t0 < x[np.argmax(y)] + 300) and
-            (0.01 < tau_rise) and (tau_rise < 50) and
-            (1 < tau_fall) and (tau_fall < 300) and
-            (0 < s_n) and (s_n < 3 * np.std(yerr))):
+    if not ((np.log10(1.) < log_amplitude) and (log_amplitude < np.log10(100. * fobs_max)) and
+            (0. < beta) and (beta < 0.01) and (0. < gamma) and
+            (x[np.argmax(y)] - 100. < t0) and (t0 < x[np.argmax(y)] + 300.) and
+            (0.01 < tau_rise) and (tau_rise < 50.) and
+            (1. < tau_fall) and (tau_fall < 300.) and
+            (0. < s_n) and (s_n < 3. * np.std(yerr))):
         return -np.inf
 
     # Gaussian Prior for plateau duration (gamma)
@@ -162,21 +164,21 @@ def log_prior(flux_vars, x, y, yerr, fobs_max):
     sigma1 = 25.
     mu2 = 60.
     sigma2 = 900.
-    return 2 / 3 * np.log(1.0 / (np.sqrt(2 * np.pi) * sigma1)) - 0.5 * (gamma - mu1) ** 2 / sigma1 ** 2 + \
-        1 / 3 * np.log(1.0 / (np.sqrt(2 * np.pi) * sigma2)) - 0.5 * (gamma - mu2) ** 2 / sigma2 ** 2
+    return 2. / 3 * np.log(1. / (np.sqrt(2 * np.pi) * sigma1)) - 0.5 * (gamma - mu1) ** 2 / sigma1 ** 2 + \
+        1. / 3 * np.log(1. / (np.sqrt(2 * np.pi) * sigma2)) - 0.5 * (gamma - mu2) ** 2 / sigma2 ** 2
 
 
 def log_prior_scale(flux_vars, yerr):
     """Priors for scaling variables"""
     scale_a, scale_b, scale_g, scale_tr, scale_tf, s_n2 = flux_vars
 
-    if not((0 < scale_a) and (0 < scale_b) and (0 < scale_g) and (0 < scale_tr) and (0 < scale_tf) and (0 < s_n2)
-           and (s_n2 < 3 * np.std(yerr))):
+    if not((0. < scale_a) and (0. < scale_b) and (0. < scale_g) and (0. < scale_tr) and (0. < scale_tf) and (0. < s_n2)
+           and (s_n2 < 3. * np.std(yerr))):
         return -np.inf
 
     # TODO: Should we change different mu/sigma for each scaling variable
     # Gaussian Priors for all scaling variables
-    mu1 = 1
+    mu1 = 1.
     sigma1 = 0.5
     return np.log(1.0 / (np.sqrt(2 * np.pi) * sigma1)) - 0.5 * (scale_a - mu1) ** 2 / sigma1 ** 2 + \
         np.log(1.0 / (np.sqrt(2 * np.pi) * sigma1)) - 0.5 * (scale_b - mu1) ** 2 / sigma1 ** 2 + \
@@ -264,7 +266,7 @@ def mcmc(x, y, yerr, x2, y2, yerr2, x3, y3, yerr3, x4, y4, yerr4):
               "I_amplitude", "I_plateau", "I_duration", "I_rise", "I_fall", "I_scatter",
               "Z_amplitude", "Z_plateau", "Z_duration", "Z_rise", "Z_fall", "Z_scatter"]
     figure = corner.corner(flat_samples, label_kwargs={"fontsize": 6})
-    # TODO: adjust plotting
+    # TODO: adjust plotting labels
     # figure.subplots_adjust(right=1.2, top=1.2)
     for ax in figure.get_axes():
         ax.tick_params(axis='both', labelsize=7)
@@ -273,18 +275,36 @@ def mcmc(x, y, yerr, x2, y2, yerr2, x3, y3, yerr3, x4, y4, yerr4):
     plt.show()
 
 
-def convertflux(flux_arr):
+def convert_flux(flux_arr):
     return -2.5 * np.log10(flux_arr) + 27.5
 
 
-def convertlum(arr):
+def convert_lum(arr):
     return -2.5 * np.log10(10 ** 7 * arr)
 
 
 if __name__ == '__main__':
-    file_name = 'PS1_PS1MD_PSc150692.snana.dat'
+    file_name = 'PS1_PS1MD_PSc000076.snana.dat'
     xr, yr, yerr_r = read_data('r', filename=file_name)
     xg, yg, yerr_g = read_data('g', filename=file_name)
     xi, yi, yerr_i = read_data('i', filename=file_name)
     xz, yz, yerr_z = read_data('z', filename=file_name)
-    mcmc(xr, yr, yerr_r, xg, yg, yerr_g, xi, yi, yerr_i, xz, yz, yerr_z)
+    # mcmc(xr, yr, yerr_r, xg, yg, yerr_g, xi, yi, yerr_i, xz, yz, yerr_z)
+
+    v = np.vectorize(sanders, otypes=[float])
+
+    xs = np.linspace(xr[0], xr[-1], 10000)
+
+    # plt.scatter(xr, yr)
+    # plt.plot(xs, convert_lum(v(xs, 55200.9, -1.0, -2.4, -3.1, -2.9, -5.0, 1.0, 5.0, 106., 10., 2.10))) # + 37.385)
+    # plt.plot(xs, convert_lum(v(xs, 55200.9, -1.0, -2.4, -3.1, -2.9, -5.0, 1.0, 5.0, 106., 10., 2.10)))
+
+    plt.scatter(xr, convert_flux(yr))
+    plt.plot(xs, convert_lum(v(xs, 55204.0, -1.0, -2.8, -3.2, -3.0, -5.0, 1.0, 7.0, 101., 10., 2.46)))
+    plt.gca().invert_yaxis()
+    plt.show()
+    ''' 
+    from astropy.coordinates import Distance
+    a = Distance(z=0.071)
+    print(a)
+    '''
