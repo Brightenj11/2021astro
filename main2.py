@@ -118,31 +118,6 @@ def sanders(t, t0, log_a, log_b1, log_b2, log_bdn, log_bdc, t1, tp, t2, td, m_p)
     if t < t0:
         return 0.0
     if t0 < t < t0 + t1:
-        return m_1 * (t / t1) ** a
-    if t0 + t1 < t < t0 + t1 + tp:
-        return m_1 * np.exp(b1 * (t - t1))
-    if t0 + t1 + tp < t < t0 + t1 + tp + t2:
-        return m_p * np.exp(-b2 * (t - (tp + t1)))
-    if t0 + t1 + tp + t2 < t < t0 + t1 + tp + t2 + td:
-        return m_2 * np.exp(-bdn * (t - (t2 + tp + t1)))
-    if t0 + t1 + tp + t2 + td < t:
-        return m_d * np.exp(-bdc * (t - (td + t2 + tp + t1)))
-
-
-def sanders2(t, t0, log_a, log_b1, log_b2, log_bdn, log_bdc, t1, tp, t2, td, m_p):
-    a = 10. ** log_a
-    b1 = 10. ** log_b1
-    b2 = 10. ** log_b2
-    bdn = 10. ** log_bdn
-    bdc = 10. ** log_bdc
-
-    m_1 = m_p / np.exp(b1 * tp)
-    m_2 = m_p / np.exp(-b2 * t2)
-    m_d = m_2 / np.exp(-bdn * td)
-
-    if t < t0:
-        return 0.0
-    if t0 < t < t0 + t1:
         return m_1 * ((t - t0) / t1) ** a
     if t0 + t1 < t < t0 + t1 + tp:
         return m_1 * np.exp(b1 * (t - (t1 + t0)))
@@ -316,7 +291,7 @@ if __name__ == '__main__':
     xz, yz, yerr_z = read_data('z', filename=file_name)
     # mcmc(xr, yr, yerr_r, xg, yg, yerr_g, xi, yi, yerr_i, xz, yz, yerr_z)
 
-    v = np.vectorize(sanders2, otypes=[float])
+    v = np.vectorize(sanders, otypes=[float])
 
     xs = np.linspace(xr[0], xr[-1], 10000)
 
