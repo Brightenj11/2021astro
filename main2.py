@@ -128,7 +128,8 @@ def sanders(t, t0, log_a, log_b1, log_b2, log_bdn, log_bdc, t1, tp, t2, td, m_p)
         return m_2 * np.exp(-bdn * (t - (t2 + tp + t1 + t0)))
     elif t0 + t1 + tp + t2 + td <= t:
         return m_d * np.exp(-bdc * (t - (td + t2 + tp + t1 + t0)))
-
+    else: 
+        raise ValueError('time t is either negative or somehow did not fit into the conditional blocks') 
 
 def log_likelihood(flux_vars, x, y, yerr):
     """
