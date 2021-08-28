@@ -111,21 +111,22 @@ def sanders(t, t0, log_a, log_b1, log_b2, log_bdn, log_bdc, t1, tp, t2, td, m_p)
     bdn = 10. ** log_bdn
     bdc = 10. ** log_bdc
 
+    # TODO: in lines 108-112 you have 10 ** exponent, but m_1, \ldots, m_d are in base e. Is this intentional? 
     m_1 = m_p / np.exp(b1 * tp)
     m_2 = m_p / np.exp(-b2 * t2)
     m_d = m_2 / np.exp(-bdn * td)
 
     if t < t0:
         return 0.0
-    if t0 < t < t0 + t1:
+    elif t < t0 + t1:
         return m_1 * ((t - t0) / t1) ** a
-    if t0 + t1 < t < t0 + t1 + tp:
+    elif t < t0 + t1 + tp:
         return m_1 * np.exp(b1 * (t - (t1 + t0)))
-    if t0 + t1 + tp < t < t0 + t1 + tp + t2:
+    elif t < t0 + t1 + tp + t2:
         return m_p * np.exp(-b2 * (t - (tp + t1 + t0)))
-    if t0 + t1 + tp + t2 < t < t0 + t1 + tp + t2 + td:
+    elif t < t0 + t1 + tp + t2 + td:
         return m_2 * np.exp(-bdn * (t - (t2 + tp + t1 + t0)))
-    if t0 + t1 + tp + t2 + td < t:
+    elif t0 + t1 + tp + t2 + td <= t:
         return m_d * np.exp(-bdc * (t - (td + t2 + tp + t1 + t0)))
 
 
