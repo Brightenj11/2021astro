@@ -293,13 +293,13 @@ if __name__ == '__main__':
     xz, yz, yerr_z = read_data('z', filename=file_name)
     # mcmc(xr, yr, yerr_r, xg, yg, yerr_g, xi, yi, yerr_i, xz, yz, yerr_z)
 
-    v = np.vectorize(sanders, otypes=[float])
+    vectorized_sanders = np.vectorize(sanders, otypes=[float])
 
     xs = np.linspace(xr[0], xr[-1], 10000)
 
     # plt.scatter(xr, yr)
-    # plt.plot(xs, convert_lum(v(xs, 55200.9, -1.0, -2.4, -3.1, -2.9, -5.0, 1.0, 5.0, 106., 10., 2.10))) # + 37.385)
-    # plt.plot(xs, convert_lum(v(xs, 55200.9, -1.0, -2.4, -3.1, -2.9, -5.0, 1.0, 5.0, 106., 10., 2.10)))
+    # plt.plot(xs, convert_lum(vectorized_sanders(xs, 55200.9, -1.0, -2.4, -3.1, -2.9, -5.0, 1.0, 5.0, 106., 10., 2.10))) # + 37.385)
+    # plt.plot(xs, convert_lum(vectorized_sanders(xs, 55200.9, -1.0, -2.4, -3.1, -2.9, -5.0, 1.0, 5.0, 106., 10., 2.10)))
 
     from astropy.coordinates import Distance
 
@@ -308,7 +308,7 @@ if __name__ == '__main__':
     print((np.log10(1360396753) - 1) * 5)
 
     plt.scatter(xr, convert_flux(yr) - 40.667)
-    plt.plot(xs, convert_lum(v(xs, 55204.0, -1.0, -2.8, -3.2, -3.0, -5.0, 1.0, 7.0, 101., 10., 2.46)))
+    plt.plot(xs, convert_lum(vectorized_sanders(xs, 55204.0, -1.0, -2.8, -3.2, -3.0, -5.0, 1.0, 7.0, 101., 10., 2.46)))
     plt.gca().invert_yaxis()
     plt.show()
 
