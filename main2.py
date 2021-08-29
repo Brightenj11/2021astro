@@ -3,6 +3,7 @@ import corner
 import emcee
 import matplotlib.pyplot as plt
 import numpy as np
+from astropy.coordinates import Distance
 
 
 def read_data(filter_name, filename: str = 'PS1_PS1MD_PSc370330.snana.dat'):
@@ -22,7 +23,7 @@ def read_data(filter_name, filename: str = 'PS1_PS1MD_PSc370330.snana.dat'):
 
     for entree in data:
         if entree[1] == filter_name:
-            if entree[3] < 100.:
+            if entree[2] / entree[3] > 3.:
                 x.append(entree[0])
                 y.append(entree[2])
                 yerr.append(entree[3])
@@ -105,16 +106,15 @@ def flux_equation(time, amplitude, beta, gamma, t0, tau_rise, tau_fall):
 
 
 def sanders(t, t0, log_a, log_b1, log_b2, log_bdn, log_bdc, t1, tp, t2, td, m_p):
-    a = 10. ** log_a
-    b1 = 10. ** log_b1
-    b2 = 10. ** log_b2
-    bdn = 10. ** log_bdn
-    bdc = 10. ** log_bdc
+    a = np.exp(log_a)
+    b1 = np.exp(log_b1)
+    b2 = np.exp(log_b2)
+    bdn = np.exp(log_bdn)
+    bdc = np.exp(log_bdc)
 
-    # TODO: in lines 108-112 you have 10 ** exponent, but m_1, \ldots, m_d are in base e. Is this intentional? 
     m_1 = m_p / np.exp(b1 * tp)
-    m_2 = m_p / np.exp(-b2 * t2)
-    m_d = m_2 / np.exp(-bdn * td)
+    m_2 = m_p / np.exp(b2 * t2)
+    m_d = m_2 / np.exp(bdn * td)
 
     if t < t0:
         return 0.0
@@ -128,8 +128,9 @@ def sanders(t, t0, log_a, log_b1, log_b2, log_bdn, log_bdc, t1, tp, t2, td, m_p)
         return m_2 * np.exp(-bdn * (t - (t2 + tp + t1 + t0)))
     elif t0 + t1 + tp + t2 + td <= t:
         return m_d * np.exp(-bdc * (t - (td + t2 + tp + t1 + t0)))
-    else: 
-        raise ValueError('time t is either negative or somehow did not fit into the conditional blocks') 
+    else:
+        raise ValueError('time t is either negative or somehow did not fit into the conditional blocks')
+
 
 def log_likelihood(flux_vars, x, y, yerr):
     """
@@ -286,6 +287,7 @@ def convert_lum(arr):
 
 
 if __name__ == '__main__':
+    # PSc300221
     file_name = 'PS1_PS1MD_PSc000076.snana.dat'
     xr, yr, yerr_r = read_data('r', filename=file_name)
     xg, yg, yerr_g = read_data('g', filename=file_name)
@@ -294,21 +296,12 @@ if __name__ == '__main__':
     # mcmc(xr, yr, yerr_r, xg, yg, yerr_g, xi, yi, yerr_i, xz, yz, yerr_z)
 
     vectorized_sanders = np.vectorize(sanders, otypes=[float])
+    xs = np.linspace(0, 200 + 20, 10000)
+    distance = Distance(z=0.26, unit='pc')
 
-    xs = np.linspace(xr[0], xr[-1], 10000)
-
-    # plt.scatter(xr, yr)
-    # plt.plot(xs, convert_lum(vectorized_sanders(xs, 55200.9, -1.0, -2.4, -3.1, -2.9, -5.0, 1.0, 5.0, 106., 10., 2.10))) # + 37.385)
-    # plt.plot(xs, convert_lum(vectorized_sanders(xs, 55200.9, -1.0, -2.4, -3.1, -2.9, -5.0, 1.0, 5.0, 106., 10., 2.10)))
-
-    from astropy.coordinates import Distance
-
-    distance = Distance(z=0.260, unit='pc')
-    print(distance)
-    print((np.log10(1360396753) - 1) * 5)
-
-    plt.scatter(xr, convert_flux(yr) - 40.667)
-    plt.plot(xs, convert_lum(vectorized_sanders(xs, 55204.0, -1.0, -2.8, -3.2, -3.0, -5.0, 1.0, 7.0, 101., 10., 2.46)))
+    xr = xr - np.min(xr)
+    plt.scatter(xr, convert_flux(yr) - 5 * (np.log10(distance.value) - 1))
+    plt.plot(xs, convert_lum(vectorized_sanders(xs, 0.0, -1.0, -2.8, -3.2, -3.0, -5.0, 1.0, 7.0, 101., 10., 2.46)))
     plt.gca().invert_yaxis()
     plt.show()
 
