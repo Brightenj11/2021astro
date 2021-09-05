@@ -16,14 +16,13 @@ def read_data(filter_name, filename: str = 'PS1_PS1MD_PSc370330.snana.dat'):
     """
     data = np.genfromtxt(os.getcwd() + '/ps1_sne_zenodo/' + filename, dtype=None, skip_header=17,
                          skip_footer=1, usecols=(1, 2, 4, 5), encoding=None)
-
     x = list()
     y = list()
     yerr = list()
 
     for entree in data:
         if entree[1] == filter_name:
-            # if entree[2] / entree[3] > 3.:
+            if entree[2] / entree[3] > 3.:
                 x.append(entree[0])
                 y.append(entree[2])
                 yerr.append(entree[3])
@@ -286,40 +285,76 @@ def convert_lum(arr):
 
 
 if __name__ == '__main__':
-    file_name = 'PS1_PS1MD_PSc500332.snana.dat'
+    number = 'PSc120215'
+    # file_name = 'PS1_PS1MD_PSc000001.snana.dat'
+    file_name = 'PS1_PS1MD_' + number + '.snana.dat'
     xr, yr, yerr_r = read_data('r', filename=file_name)
     xg, yg, yerr_g = read_data('g', filename=file_name)
     xi, yi, yerr_i = read_data('i', filename=file_name)
     xz, yz, yerr_z = read_data('z', filename=file_name)
     # mcmc(xr, yr, yerr_r, xg, yg, yerr_g, xi, yi, yerr_i, xz, yz, yerr_z)
 
+    # Find distance to object in parsecs
+    distance = Distance(z=0.092, unit='pc')
+
+    # Find distance modulus
+    yr = convert_flux(yr) - 5 * (np.log10(distance.value) - 1)
+    yg = convert_flux(yg) - 5 * (np.log10(distance.value) - 1)
+    yi = convert_flux(yi) - 5 * (np.log10(distance.value) - 1)
+    yz = convert_flux(yz) - 5 * (np.log10(distance.value) - 1)
+
     vectorized_sanders = np.vectorize(sanders, otypes=[float])
-    xs = np.linspace(56397.2 - 30, 56397.2 + 500, 10000)
-    distance = Distance(z=0.098, unit='pc')
-
-    # plt.scatter(xr, convert_flux(yr) - 5 * (np.log10(distance.value) - 1))
-    # plt.plot(xs, convert_lum(vectorized_sanders(xs, 55789.3, -1.0, -2.5, -4.7, -2.7, -3.9, 1.0, 6.0, 84., 12., 1.02)))
-    # plt.gca().invert_yaxis()
-    # plt.show()
-
-    with np.load('PSc500332.npz') as data:
+    together_x, together_y = np.concatenate((xr, xg, xi, xz)), np.concatenate((yr, yg, yi, yz))  # For plot limits
+    xs = np.linspace(np.min(together_x) - 50, np.max(together_x) + 50, 5000)
+    # Load Variables
+    with np.load(number + '.npz') as data:
         r_amp = data['r_amp']
         r_beta = data['r_beta']
         r_gamma = data['r_gamma']
         r_t0 = data['t0']
         r_tr = data['r_tr']
         r_tf = data['r_tf']
-        g_amp = data['r_amp'] * data['g_scale_a']
-        g_beta = data['r_beta'] * data['g_scale_b']
-        g_gamma = data['r_gamma'] * data['g_scale_g']
-        g_tr = data['r_tr'] * data['g_scale_tr']
-        g_tf = data['r_tf'] * data['g_scale_tf']
-    plt.errorbar(xr, yr, yerr_r)
-    plt.show()
-    plt.scatter(xr, convert_flux(yr) - 5 * (np.log10(distance.value) - 1))
-    plt.plot(xs, convert_lum(vectorized_sanders(xs, 56397.2, -1.0, -2.3, -3.2, -3.0, -4.3, 1.0, 9.0, 105., 11., 2.21)))
-    for i in range(100, 130):
-        plt.plot(xs, convert_flux(flux_equation(xs, 10. ** r_amp[0][i], r_beta[0][i], 10. ** r_gamma[0][i], r_t0[0][i], r_tr[0][i], r_tf[0][i])) - 5 * (np.log10(distance.value) - 1), alpha=0.1)
-        # plt.plot(xs, convert_flux(flux_equation(xs, 10. ** g_amp[0][i], g_beta[0][i], 10. ** g_gamma[0][i], r_t0[0][i], g_tr[0][i], g_tf[0][i])) - 5 * (np.log10(distance.value) - 1), alpha=0.1)
+
+        g_amp = data['r_amp'] + data['g_scale_a']
+        g_beta = data['r_beta'] * 10. ** data['g_scale_b']
+        g_gamma = data['r_gamma'] + data['g_scale_g']
+        g_tr = data['r_tr'] * 10. ** data['g_scale_tr']
+        g_tf = data['r_tf'] * 10. ** data['g_scale_tf']
+
+        i_amp = data['r_amp'] + data['i_scale_a']
+        i_beta = data['r_beta'] * 10. ** data['i_scale_b']
+        i_gamma = data['r_gamma'] + data['i_scale_g']
+        i_tr = data['r_tr'] * 10. ** data['i_scale_tr']
+        i_tf = data['r_tf'] * 10. ** data['i_scale_tf']
+
+        z_amp = i_amp + data['g_scale_a']
+        z_beta = i_beta * 10. ** data['g_scale_b']
+        z_gamma = i_gamma + data['g_scale_g']
+        z_tr = i_tr * 10. ** data['g_scale_tr']
+        z_tf = i_tf * 10. ** data['g_scale_tf']
+
+    # Plot data
+    plt.scatter(xr, yr, color='r', label='R band')
+    plt.scatter(xg, yg, color='g', label='G Band')
+    plt.scatter(xi, yi, color='b', label='I band')
+    plt.scatter(xz, yz, color='y', label='Z band')
+
+    # Plot fits
+    for i in range(0, 25):
+        plt.plot(xs, convert_flux(flux_equation(xs, 10. ** r_amp[0][i], r_beta[0][i], 10. ** r_gamma[0][i],
+                                                r_t0[0][i], r_tr[0][i], r_tf[0][i])) - 5 * (np.log10(distance.value)-1),
+                 alpha=0.1, color='r')
+        plt.plot(xs, convert_flux(flux_equation(xs, 10. ** g_amp[0][i], g_beta[0][i], 10. ** g_gamma[0][i],
+                                                r_t0[0][i], g_tr[0][i], g_tf[0][i])) - 5 * (np.log10(distance.value)-1),
+                 alpha=0.1, color='g')
+        plt.plot(xs, convert_flux(flux_equation(xs, 10. ** i_amp[0][i], i_beta[0][i], 10. ** i_gamma[0][i],
+                                                r_t0[0][i], i_tr[0][i], i_tf[0][i])) - 5 * (np.log10(distance.value)-1),
+                 alpha=0.1, color='b')
+        plt.plot(xs, convert_flux(flux_equation(xs, 10. ** z_amp[0][i], z_beta[0][i], 10. ** z_gamma[0][i],
+                                                r_t0[0][i], z_tr[0][i], z_tf[0][i])) - 5 * (np.log10(distance.value)-1),
+                 alpha=0.1, color='y')
     plt.gca().invert_yaxis()
+    plt.legend()
+    plt.ylim(np.max(together_y) + 0.5, np.min(together_y) - 0.5)
+    plt.savefig(number, dpi=300)
     plt.show()

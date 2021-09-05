@@ -8,6 +8,8 @@ import jax.numpy as jnp
 from jax.config import config
 import arviz as az
 import matplotlib.pyplot as plt
+from argparse import ArgumentParser
+
 config.update("jax_enable_x64", True)
 
 
@@ -19,16 +21,15 @@ def read_data(filter_name, filename: str = 'PS1_PS1MD_PSc370330.snana.dat'):
     :param filename:
     :return: times (x), flux values (y), and flux errors (yerr)
     """
-    data = np.genfromtxt(os.getcwd() + '/ps1_sne_zenodo/ps1_sne_zenodo/' + filename, dtype=None, skip_header=17,
+    data = np.genfromtxt(os.getcwd() + '/ps1_sne_zenodo/' + filename, dtype=None, skip_header=17,
                          skip_footer=1, usecols=(1, 2, 4, 5), encoding=None)
-
     x = list()
     y = list()
     yerr = list()
 
     for entree in data:
         if entree[1] == filter_name:
-            if entree[3] < 100.:
+            if entree[2] / entree[3] > 3.:
                 x.append(entree[0])
                 y.append(entree[2])
                 yerr.append(entree[3])
@@ -65,6 +66,7 @@ def model(x1, x2, x3, x4, y1=None, y2=None, y3=None, y4=None, yerr1=None, yerr2=
     r_sn = numpyro.sample('r_sn', dist.HalfNormal(jnp.std(yerr1)))  # Intrinsic Scatter
 
     # Sample G band
+    # Limit amplitude scaling to 2
     g_scale_a = numpyro.sample('g_scale_a', dist.TruncatedDistribution(base_dist=dist.Normal(0., 0.25), low=None,
                                                                        high=jnp.log10(2)))
     g_scale_b = numpyro.sample('g_scale_b', dist.Normal(0., 0.25))
@@ -128,10 +130,13 @@ def model(x1, x2, x3, x4, y1=None, y2=None, y3=None, y4=None, yerr1=None, yerr2=
 
 
 if __name__ == '__main__':
+    parser = ArgumentParser()
+    parser.add_argument('name', type=str, help='SN to fit')
+    parser.add_argument('--plot', action='store_true', help='Plot trace, posterior, and fits')
+    args = parser.parse_args()
+
     # Get data
-    number = '330064'
-    file_name = 'PS1_PS1MD_PSc' + number + '.snana.dat'
-    to_plot = False
+    file_name = 'PS1_PS1MD_PSc' + args.name[-6:] + '.snana.dat'
     xr, yr, yerr_r = read_data('r', filename=file_name)
     xg, yg, yerr_g = read_data('g', filename=file_name)
     xi, yi, yerr_i = read_data('i', filename=file_name)
@@ -142,13 +147,23 @@ if __name__ == '__main__':
     rng_key, rng_key_ = random.split(rng_key)
     kernel = NUTS(model)
 
-    mcmc = MCMC(kernel, num_warmup=80000, num_samples=10000, thinning=1, num_chains=1)
+    mcmc = MCMC(kernel, num_warmup=700000, num_samples=10000, thinning=1, num_chains=1)
     mcmc.run(rng_key_, x1=xr, x2=xg, x3=xi, x4=xz, y1=yr, y2=yg, y3=yi, y4=yz, yerr1=yerr_r, yerr2=yerr_g, yerr3=yerr_i,
              yerr4=yerr_z, fobs_max=np.max(yr), time_max=xr[np.argmax(yr)])
     mcmc.print_summary()
     samples = mcmc.get_samples()
     ds = az.from_numpyro(mcmc)
-    if to_plot:
+
+    np.savez(args.name + '.npz', r_amp=ds.posterior.r_amp, r_beta=ds.posterior.r_beta, r_gamma=ds.posterior.r_gamma,
+             t0=ds.posterior.t0, r_tr=ds.posterior.r_tr, r_tf=ds.posterior.r_tf, r_sn=ds.posterior.r_sn,
+             g_scale_a=ds.posterior.g_scale_a, g_scale_b=ds.posterior.g_scale_b, g_scale_g=ds.posterior.g_scale_g,
+             g_scale_tr=ds.posterior.g_scale_tr, g_scale_tf=ds.posterior.g_scale_tf, g_sn=ds.posterior.g_sn,
+             i_scale_a=ds.posterior.i_scale_a, i_scale_b=ds.posterior.i_scale_b, i_scale_g=ds.posterior.i_scale_g,
+             i_scale_tr=ds.posterior.i_scale_tr, i_scale_tf=ds.posterior.i_scale_tf, i_sn=ds.posterior.i_sn,
+             z_scale_a=ds.posterior.z_scale_a, z_scale_b=ds.posterior.z_scale_b, z_scale_g=ds.posterior.z_scale_g,
+             z_scale_tr=ds.posterior.z_scale_tr, z_scale_tf=ds.posterior.z_scale_tf, z_sn=ds.posterior.z_sn)
+
+    if args.plot:
         # Plot data
         plt.scatter(xr, yr, color='r', label='R band')
         plt.scatter(xg, yg, color='g', label='G Band')
@@ -217,17 +232,3 @@ if __name__ == '__main__':
             plt.plot(t, predictions['flux_eq_z'][i], color='y', alpha=0.1)
         plt.xlim([xr[np.argmax(yr)] - 100, xr[np.argmax(yr)] + 100])
         plt.show()
-
-    np.savez(number+'.npz', r_amp=ds.posterior.r_amp, r_beta=ds.posterior.r_beta, r_gamma=ds.posterior.r_gamma,
-             t0=ds.posterior.t0, r_tr=ds.posterior.r_tr, r_tf=ds.posterior.r_tf, r_sn=ds.posterior.r_sn,
-             g_scale_a=ds.posterior.g_scale_a, g_scale_b=ds.posterior.g_scale_b, g_scale_g=ds.posterior.g_scale_g,
-             g_scale_tr=ds.posterior.g_scale_tr, g_scale_tf=ds.posterior.g_scale_tf, g_sn=ds.posterior.g_sn,
-             i_scale_a=ds.posterior.i_scale_a, i_scale_b=ds.posterior.i_scale_b, i_scale_g=ds.posterior.i_scale_g,
-             i_scale_tr=ds.posterior.i_scale_tr, i_scale_tf=ds.posterior.i_scale_tf, i_sn=ds.posterior.i_sn,
-             z_scale_a=ds.posterior.z_scale_a, z_scale_b=ds.posterior.z_scale_b, z_scale_g=ds.posterior.z_scale_g,
-             z_scale_tr=ds.posterior.z_scale_tr, z_scale_tf=ds.posterior.z_scale_tf, z_sn=ds.posterior.z_sn)
-
-    # with np.load('000001.npz') as data:
-    #    a = data['r_amp']
-    #    b = data['r_beta']
-    #    g = data['r_gamma']
