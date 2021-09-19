@@ -290,11 +290,12 @@ def convert_lum(arr):
     return -2.5 * np.log10(10 ** 7 * arr)
 
 
-if __name__ == '__main__':
+def save_model_params(plot=False):
     # Load PS1 names, PSc names, redshifts, and time of explosions
-    with np.load('PS1-list.npz') as data2:
-        PS1_list = data2['SN_list']
+    with np.load('PS1-list.npz') as SN_data:
+        ps1_list = SN_data['SN_list']
 
+    # TODO: Save lists into
     psc_list = ['PSc000001', 'PSc000076', 'PSc000098', 'PSc000218', 'PSc010163', 'PSc050581', 'PSc060230', 'PSc060284',
                 'PSc061196', 'PSc070291', 'PSc071072', 'PSc080768', 'PSc091034', 'PSc100170', 'PSc120113', 'PSc120175',
                 'PSc120215', 'PSc120228', 'PSc120333', 'PSc120419', 'PSc130327', 'PSc130816', 'PSc130913', 'PSc131014',
@@ -317,156 +318,177 @@ if __name__ == '__main__':
                55883, 55883, 55883, 55893, 55911, 55911, 55941, 55948, 56000, 56013, 56029, 56029, 56091, 56166, 56207,
                56210, 56210, 56235, 56240, 56326, 56353, 56385, 56399, 56408, 56417, 56417, 56478, 56513, 56564, 56624,
                56659]
-
-    run = True
-    plot = False
-
     name = list()
     band = list()
     peak_height = list()
     rise_slope = list()
     plateau_slope = list()
-    if run:
-        for SN in range(len(psc_list)):
-            number = psc_list[SN]
-            if number == 'PSc131014' or number == 'PSc300008' or number == 'PSc120113' or number == 'PSc130327' or \
-                    number == 'PSc130816' or number == 'PSc340346' or number == 'PSc350092' or number == 'PSc350330'\
-                    or number == 'PSc540215':
-                continue
-            else:
-                file_name = 'PS1_PS1MD_' + number + '.snana.dat'
-                xr, yr, yerr_r = read_data('r', filename=file_name)
-                xg, yg, yerr_g = read_data('g', filename=file_name)
-                xi, yi, yerr_i = read_data('i', filename=file_name)
-                xz, yz, yerr_z = read_data('z', filename=file_name)
 
-                # Find distance to object in parsecs
-                distance = Distance(z=redshift_list[SN], unit='pc')
+    for SN in range(len(psc_list)):
+        number = psc_list[SN]
+        if number == 'PSc050581':  # Sanders doesn't fit PSc050581
+            continue
+        else:
+            file_name = 'PS1_PS1MD_' + number + '.snana.dat'
+            xr, yr, yerr_r = read_data('r', filename=file_name)
+            xg, yg, yerr_g = read_data('g', filename=file_name)
+            xi, yi, yerr_i = read_data('i', filename=file_name)
+            xz, yz, yerr_z = read_data('z', filename=file_name)
 
-                # Find distance modulus
-                yr = convert_flux(yr) - 5 * (np.log10(distance.value) - 1)
-                yg = convert_flux(yg) - 5 * (np.log10(distance.value) - 1)
-                yi = convert_flux(yi) - 5 * (np.log10(distance.value) - 1)
-                yz = convert_flux(yz) - 5 * (np.log10(distance.value) - 1)
+            # Find distance to object in parsecs
+            distance = Distance(z=redshift_list[SN], unit='pc')
 
-                # Load Variables
-                with np.load(number + '.npz') as data:
-                    r_amp = data['r_amp']
-                    r_beta = data['r_beta']
-                    r_gamma = data['r_gamma']
-                    r_t0 = data['t0']
-                    r_tr = data['r_tr']
-                    r_tf = data['r_tf']
+            # Find distance modulus
+            yr = convert_flux(yr) - 5 * (np.log10(distance.value) - 1)
+            yg = convert_flux(yg) - 5 * (np.log10(distance.value) - 1)
+            yi = convert_flux(yi) - 5 * (np.log10(distance.value) - 1)
+            yz = convert_flux(yz) - 5 * (np.log10(distance.value) - 1)
 
-                    g_amp = data['r_amp'] + data['g_scale_a']
-                    g_beta = data['r_beta'] * 10. ** data['g_scale_b']
-                    g_gamma = data['r_gamma'] + data['g_scale_g']
-                    g_tr = data['r_tr'] * 10. ** data['g_scale_tr']
-                    g_tf = data['r_tf'] * 10. ** data['g_scale_tf']
+            # Load Variables
+            with np.load(number + '.npz') as data:
+                r_amp = data['r_amp']
+                r_beta = data['r_beta']
+                r_gamma = data['r_gamma']
+                r_t0 = data['t0']
+                r_tr = data['r_tr']
+                r_tf = data['r_tf']
 
-                    i_amp = data['r_amp'] + data['i_scale_a']
-                    i_beta = data['r_beta'] * 10. ** data['i_scale_b']
-                    i_gamma = data['r_gamma'] + data['i_scale_g']
-                    i_tr = data['r_tr'] * 10. ** data['i_scale_tr']
-                    i_tf = data['r_tf'] * 10. ** data['i_scale_tf']
+                g_amp = data['r_amp'] + data['g_scale_a']
+                g_beta = data['r_beta'] * 10. ** data['g_scale_b']
+                g_gamma = data['r_gamma'] + data['g_scale_g']
+                g_tr = data['r_tr'] * 10. ** data['g_scale_tr']
+                g_tf = data['r_tf'] * 10. ** data['g_scale_tf']
 
-                    z_amp = i_amp + data['z_scale_a']
-                    z_beta = i_beta * 10. ** data['z_scale_b']
-                    z_gamma = i_gamma + data['z_scale_g']
-                    z_tr = i_tr * 10. ** data['z_scale_tr']
-                    z_tf = i_tf * 10. ** data['z_scale_tf']
+                i_amp = data['r_amp'] + data['i_scale_a']
+                i_beta = data['r_beta'] * 10. ** data['i_scale_b']
+                i_gamma = data['r_gamma'] + data['i_scale_g']
+                i_tr = data['r_tr'] * 10. ** data['i_scale_tr']
+                i_tf = data['r_tf'] * 10. ** data['i_scale_tf']
 
-                vectorized_sanders = np.vectorize(sanders, otypes=[float])
-                # Variables for setting plot limits
+                z_amp = i_amp + data['z_scale_a']
+                z_beta = i_beta * 10. ** data['z_scale_b']
+                z_gamma = i_gamma + data['z_scale_g']
+                z_tr = i_tr * 10. ** data['z_scale_tr']
+                z_tf = i_tf * 10. ** data['z_scale_tf']
+
+            # Variables for setting plot limits
+            xs = np.linspace(t0_list[SN] - 500, t0_list[SN] + 500, 10000)
+
+            # Get y magnitudes for one fit
+            magnitude_r = convert_flux(flux_equation(xs, 10. ** r_amp[0][0], r_beta[0][0], 10. ** r_gamma[0][0],
+                                                     r_t0[0][0], r_tr[0][0], r_tf[0][0])) - 5 * (
+                                      np.log10(distance.value) - 1)
+            magnitude_g = convert_flux(flux_equation(xs, 10. ** g_amp[0][0], g_beta[0][0], 10. ** g_gamma[0][0],
+                                                     r_t0[0][0], g_tr[0][0], g_tf[0][0])) - 5 * (
+                                      np.log10(distance.value) - 1)
+            magnitude_i = convert_flux(flux_equation(xs, 10. ** i_amp[0][0], i_beta[0][0], 10. ** i_gamma[0][0],
+                                                     r_t0[0][0], i_tr[0][0], i_tf[0][0])) - 5 * (
+                                      np.log10(distance.value) - 1)
+            magnitude_z = convert_flux(flux_equation(xs, 10. ** z_amp[0][0], z_beta[0][0], 10. ** z_gamma[0][0],
+                                                     r_t0[0][0], z_tr[0][0], z_tf[0][0])) - 5 * (
+                                      np.log10(distance.value) - 1)
+
+            # Time of peak magnitude
+            time_max_r = xs[np.argmin(magnitude_r)]
+            time_max_g = xs[np.argmin(magnitude_g)]
+            time_max_i = xs[np.argmin(magnitude_i)]
+            time_max_z = xs[np.argmin(magnitude_z)]
+
+            # Magnitude peak
+            peak_r = np.min(magnitude_r)
+            peak_g = np.min(magnitude_g)
+            peak_i = np.min(magnitude_i)
+            peak_z = np.min(magnitude_z)
+
+            # Add SN name, band, and magnitude peak
+            name.extend((ps1_list[SN], ps1_list[SN], ps1_list[SN], ps1_list[SN]))
+            band.extend(('r', 'g', 'i', 'z'))
+            peak_height.extend((peak_r, peak_g, peak_i, peak_z))
+
+            # Slopes for all banes
+            plateau_slope.append(xs[np.argmin(magnitude_r) + np.argmin(
+                np.abs(magnitude_r[np.nonzero(xs > time_max_r)] - (peak_r + 1)))]
+                                 - time_max_r)
+            rise_slope.append(time_max_r -
+                              xs[np.argmin(np.abs(magnitude_r[np.nonzero(xs < time_max_r)] - (peak_r + 1)))])
+            plateau_slope.append(xs[np.argmin(magnitude_g) + np.argmin(
+                np.abs(magnitude_g[np.nonzero(xs > time_max_g)] - (peak_g + 1)))]
+                                 - time_max_g)
+            rise_slope.append(time_max_g -
+                              xs[np.argmin(np.abs(magnitude_g[np.nonzero(xs < time_max_g)] - (peak_g + 1)))])
+            plateau_slope.append(xs[np.argmin(magnitude_i) + np.argmin(
+                np.abs(magnitude_i[np.nonzero(xs > time_max_i)] - (peak_i + 1)))]
+                                 - time_max_i)
+            rise_slope.append(time_max_z -
+                              xs[np.argmin(np.abs(magnitude_i[np.nonzero(xs < time_max_i)] - (peak_i + 1)))])
+            plateau_slope.append(xs[np.argmin(magnitude_z) + np.argmin(
+                np.abs(magnitude_z[np.nonzero(xs > time_max_z)] - (peak_z + 1)))]
+                                 - time_max_z)
+            rise_slope.append(time_max_z -
+                              xs[np.argmin(np.abs(magnitude_z[np.nonzero(xs < time_max_z)] - (peak_z + 1)))])
+
+            if plot:
+                # X_temp used to set plot limits
+                x_temp = np.linspace(t0_list[SN] - 5, t0_list[SN] + 5)
+                ys = np.concatenate(
+                    (convert_flux(flux_equation(x_temp, 10. ** r_amp[0][0], r_beta[0][0], 10. ** r_gamma[0][0],
+                                                r_t0[0][0], r_tr[0][0], r_tf[0][0])) - 5 * (
+                             np.log10(distance.value) - 1),
+                     convert_flux(flux_equation(x_temp, 10. ** g_amp[0][0], g_beta[0][0], 10. ** g_gamma[0][0],
+                                                r_t0[0][0], g_tr[0][0], g_tf[0][0])) - 5 * (
+                             np.log10(distance.value) - 1),
+                     convert_flux(flux_equation(x_temp, 10. ** i_amp[0][0], i_beta[0][0], 10. ** i_gamma[0][0],
+                                                r_t0[0][0], i_tr[0][0], i_tf[0][0])) - 5 * (
+                             np.log10(distance.value) - 1),
+                     convert_flux(flux_equation(x_temp, 10. ** z_amp[0][0], z_beta[0][0], 10. ** z_gamma[0][0],
+                                                r_t0[0][0], z_tr[0][0], z_tf[0][0])) - 5 * (
+                             np.log10(distance.value) - 1)))
+
+                # Plot data
+                plt.figure()
+                plt.scatter(xr, yr, color='r', label='R band')
+                plt.scatter(xg, yg, color='g', label='G Band')
+                plt.scatter(xi, yi, color='b', label='I band')
+                plt.scatter(xz, yz, color='y', label='Z band')
+
                 xs = np.linspace(t0_list[SN] - 30, t0_list[SN] + 125, 10000)
 
-                # Get y magnitudes
-                magnitude_r = convert_flux(flux_equation(xs, 10. ** r_amp[0][0], r_beta[0][0], 10. ** r_gamma[0][0],
-                                                    r_t0[0][0], r_tr[0][0], r_tf[0][0])) - 5 * (np.log10(distance.value) - 1)
-                magnitude_g = convert_flux(flux_equation(xs, 10. ** g_amp[0][0], g_beta[0][0], 10. ** g_gamma[0][0],
-                                                    r_t0[0][0], g_tr[0][0], g_tf[0][0])) - 5 * (np.log10(distance.value)-1)
-                magnitude_i = convert_flux(flux_equation(xs, 10. ** i_amp[0][0], i_beta[0][0], 10. ** i_gamma[0][0],
-                                                    r_t0[0][0], i_tr[0][0], i_tf[0][0])) - 5 * (np.log10(distance.value)-1)
-                magnitude_z = convert_flux(flux_equation(xs, 10. ** z_amp[0][0], z_beta[0][0], 10. ** z_gamma[0][0],
-                                                    r_t0[0][0], z_tr[0][0], z_tf[0][0])) - 5 * (np.log10(distance.value)-1)
+                # Plot fits
+                for i in range(0, 25):
+                    plt.plot(xs, convert_flux(
+                        flux_equation(xs, 10. ** r_amp[0][i], r_beta[0][i], 10. ** r_gamma[0][i], r_t0[0][i],
+                                      r_tr[0][i], r_tf[0][i])) - 5 * (np.log10(distance.value) - 1), color='r',
+                             alpha=0.1)
+                    plt.plot(xs, convert_flux(
+                        flux_equation(xs, 10. ** g_amp[0][i], g_beta[0][i], 10. ** g_gamma[0][i], r_t0[0][i],
+                                      g_tr[0][i], g_tf[0][i])) - 5 * (np.log10(distance.value) - 1), color='g',
+                             alpha=0.1)
+                    plt.plot(xs, convert_flux(
+                        flux_equation(xs, 10. ** i_amp[0][i], i_beta[0][i], 10. ** i_gamma[0][i], r_t0[0][i],
+                                      i_tr[0][i], i_tf[0][i])) - 5 * (np.log10(distance.value) - 1), color='b',
+                             alpha=0.1)
+                    plt.plot(xs, convert_flux(
+                        flux_equation(xs, 10. ** z_amp[0][i], z_beta[0][i], 10. ** z_gamma[0][i], r_t0[0][i],
+                                      z_tr[0][i], z_tf[0][i])) - 5 * (np.log10(distance.value) - 1), color='b',
+                             alpha=0.1)
+                plt.gca().invert_yaxis()
+                plt.legend()
+                plt.xlim(xs[0], xs[-1])
+                plt.ylim(np.max(ys) + 2.5, np.min(ys) - 1.5)
+                plt.show()
+                plt.savefig(number, dpi=300)
 
-                # Time of peak magnitude
-                time_max_r = xs[np.argmin(magnitude_r)]
-                time_max_g = xs[np.argmin(magnitude_g)]
-                time_max_i = xs[np.argmin(magnitude_i)]
-                time_max_z = xs[np.argmin(magnitude_z)]
-                # Magnitude peak
-                peak_r = np.min(magnitude_r)
-                peak_g = np.min(magnitude_g)
-                peak_i = np.min(magnitude_i)
-                peak_z = np.min(magnitude_z)
-
-                # Add SN name, band, and magnitude peak
-                name.extend((PS1_list[SN], PS1_list[SN], PS1_list[SN], PS1_list[SN]))
-                band.extend(('r', 'g', 'i', 'z'))
-                peak_height.extend((peak_r, peak_g, peak_i, peak_z))
-
-                # Slopes for all banes
-                plateau_slope.append(xs[np.argmin(magnitude_r) + np.argmin(np.abs(magnitude_r[np.nonzero(xs > time_max_r)] - (peak_r + 1)))]
-                                     - time_max_r)
-                rise_slope.append(time_max_r -
-                                  xs[np.argmin(np.abs(magnitude_r[np.nonzero(xs < time_max_r)] - (peak_r + 1)))])
-                plateau_slope.append(xs[np.argmin(magnitude_g) + np.argmin(np.abs(magnitude_g[np.nonzero(xs > time_max_g)] - (peak_g + 1)))]
-                                     - time_max_g)
-                rise_slope.append(time_max_g -
-                                  xs[np.argmin(np.abs(magnitude_g[np.nonzero(xs < time_max_g)] - (peak_g + 1)))])
-                plateau_slope.append(xs[np.argmin(magnitude_i) + np.argmin(np.abs(magnitude_i[np.nonzero(xs > time_max_i)] - (peak_i + 1)))]
-                                     - time_max_i)
-                rise_slope.append(time_max_z -
-                                  xs[np.argmin(np.abs(magnitude_i[np.nonzero(xs < time_max_i)] - (peak_i + 1)))])
-                plateau_slope.append(xs[np.argmin(magnitude_z) + np.argmin(np.abs(magnitude_z[np.nonzero(xs > time_max_z)] - (peak_z + 1)))]
-                                     - time_max_z)
-                rise_slope.append(time_max_z -
-                                  xs[np.argmin(np.abs(magnitude_z[np.nonzero(xs < time_max_z)] - (peak_z + 1)))])
-
-                if plot:
-                    # X_temp used to set plot limits
-                    x_temp = np.linspace(t0_list[SN] - 5, t0_list[SN] + 5)
-                    ys = np.concatenate(
-                        (convert_flux(flux_equation(x_temp, 10. ** r_amp[0][0], r_beta[0][0], 10. ** r_gamma[0][0],
-                                                    r_t0[0][0], r_tr[0][0], r_tf[0][0])) - 5 * (
-                                     np.log10(distance.value) - 1),
-                         convert_flux(flux_equation(x_temp, 10. ** g_amp[0][0], g_beta[0][0], 10. ** g_gamma[0][0],
-                                                    r_t0[0][0], g_tr[0][0], g_tf[0][0])) - 5 * (
-                                     np.log10(distance.value) - 1),
-                         convert_flux(flux_equation(x_temp, 10. ** i_amp[0][0], i_beta[0][0], 10. ** i_gamma[0][0],
-                                                    r_t0[0][0], i_tr[0][0], i_tf[0][0])) - 5 * (
-                                     np.log10(distance.value) - 1),
-                         convert_flux(flux_equation(x_temp, 10. ** z_amp[0][0], z_beta[0][0], 10. ** z_gamma[0][0],
-                                                    r_t0[0][0], z_tr[0][0], z_tf[0][0])) - 5 * (
-                                     np.log10(distance.value) - 1)))
-
-                    # Plot data
-                    plt.figure()
-                    plt.scatter(xr, yr, color='r', label='R band')
-                    plt.scatter(xg, yg, color='g', label='G Band')
-                    plt.scatter(xi, yi, color='b', label='I band')
-                    plt.scatter(xz, yz, color='y', label='Z band')
-
-                    # Plot fits
-                    for i in range(0, 25):
-                        plt.plot(xs, magnitude_r, alpha=0.1, color='r')
-                        plt.plot(xs, magnitude_g, alpha=0.1, color='g')
-                        plt.plot(xs, magnitude_i, alpha=0.1, color='b')
-                        plt.plot(xs, magnitude_z, alpha=0.1, color='y')
-                    plt.gca().invert_yaxis()
-                    plt.legend()
-                    plt.xlim(xs[0], xs[-1])
-                    plt.ylim(np.max(ys) + 2.5, np.min(ys) - 1.5)
-                    plt.show()
-                    plt.savefig(number, dpi=300)
-
-    # Save model statistics
+    # Save statistics
     output_df = pd.DataFrame({'name': name, 'band': band,
                               'peak_height': peak_height,
                               'rise_slope': rise_slope,
                               'plateau_slope': plateau_slope})
     output_df.to_csv('model.dat')
+
+
+def save_sanders_params():
+    with np.load('PS1-list.npz') as SN_data:
+        ps1_list = SN_data['SN_list']
 
     # Sanders statistics
     sanders_name = list()
@@ -477,7 +499,7 @@ if __name__ == '__main__':
 
     s_data = np.genfromtxt('sanders_params.dat', dtype=None, usecols=(0, 1, 2, 5, 8, 11, 20, 23, 32), encoding='utf-8')
     for s_entree in s_data:
-        if s_entree[1] in PS1_list:
+        if s_entree[1] in ps1_list and s_entree[0] != 'y-band':
             # Track Variables
             s_t0 = s_entree[2]
             s_a = np.exp(s_entree[3])
@@ -490,18 +512,143 @@ if __name__ == '__main__':
 
             sanders_name.append(s_entree[1])
             sanders_band.append(s_entree[0])
+
             # Check if rise slope falls between t0 + t1 and t0 + t1 + tp
             if s_tp > 460517 / (500000 * s_b1):
-                sanders_rise_slope.append((s_t0 + s_t1 + s_tp) + (-s_b1 * s_tp - s_b1 * s_t0 - s_b1 * s_t1 + 0.921034) / s_b1)
+                sanders_rise_slope.append((s_t0 + s_t1 + s_tp) +
+                                          (-s_b1 * s_tp - s_b1 * s_t0 - s_b1 * s_t1 + 0.921034) / s_b1)
+
             # Rise slope falls between t0 and t0 + t1
             else:
-                sanders_rise_slope.append((s_t0 + s_t1 + s_tp) + np.exp(-0.921034 / s_a) * (-np.exp(0.921034 / s_a) * s_t0 - np.exp((s_b1 * s_tp) / s_a) * s_t1))
+                sanders_rise_slope.append((s_t0 + s_t1 + s_tp)
+                                          + np.exp(-0.921034 / s_a) * (-np.exp(0.921034 / s_a) * s_t0 -
+                                                                       np.exp((s_b1 * s_tp) / s_a) * s_t1))
             # Plateau time - Peak time
-            sanders_plateau_slope.append(-(-s_b2 * s_tp - s_b2 * s_t0 - s_b2 * s_t1 - 0.921034) / s_b2 - (s_t0 + s_t1 + s_tp))
+            sanders_plateau_slope.append(-(-s_b2 * s_tp - s_b2 * s_t0 - s_b2 * s_t1 - 0.921034) / s_b2
+                                         - (s_t0 + s_t1 + s_tp))
             # Amplitude
             sanders_peak_height.append(-2.5 * np.log10(10 ** 7 * s_m_1 * np.exp(s_b1 * s_tp)))
 
     # Save sanders statistics
-    output_df = pd.DataFrame({'sanders_name': sanders_name, 'sanders_band': sanders_band, 'sanders_peak_height':sanders_peak_height,
-                              'sanders_rise_slope': sanders_rise_slope, 'sanders_plateau_slope': sanders_plateau_slope})
+    output_df = pd.DataFrame({'sanders_name': sanders_name, 'sanders_band': sanders_band,
+                              'sanders_peak_height':sanders_peak_height, 'sanders_rise_slope': sanders_rise_slope,
+                              'sanders_plateau_slope': sanders_plateau_slope})
     output_df.to_csv('sanders.dat')
+
+
+if __name__ == '__main__':
+    # Load statistics
+    sanders_data = np.genfromtxt('sanders.dat', dtype=None, usecols=(1, 2, 3), skip_header=1, encoding='utf-8',
+                                 delimiter=',')
+    model_data = np.genfromtxt('model.dat', dtype=None, usecols=(1, 2, 3), skip_header=1, encoding='utf-8',
+                               delimiter=',')
+    # Plot model peak heights vs sanders peak heights
+    largest_diff = 0
+    for i in range(len(model_data)):
+        for j in range(len(sanders_data)):
+            if model_data[i][1] == sanders_data[j][1][0] and model_data[i][0] == sanders_data[j][0]:
+                plt.scatter(model_data[i][2], sanders_data[j][2])
+                difference = model_data[i][2] - sanders_data[j][2]
+                if difference > largest_diff:
+                    largest_diff = difference
+                    print(largest_diff, model_data[i][0], model_data[i][1])
+    plt.plot(np.arange(-20, -14), np.arange(-20, -14))
+    plt.show()
+
+    # Plot largest difference SN's (PS1-12bt, g-band)
+    file_name = 'PS1_PS1MD_PSc350330.snana.dat'
+    xr, yr, yerr_r = read_data('r', filename=file_name)
+    xg, yg, yerr_g = read_data('g', filename=file_name)
+    xi, yi, yerr_i = read_data('i', filename=file_name)
+    xz, yz, yerr_z = read_data('z', filename=file_name)
+
+    with np.load('PSc350330.npz') as data:
+        r_amp = data['r_amp']
+        r_beta = data['r_beta']
+        r_gamma = data['r_gamma']
+        r_t0 = data['t0']
+        r_tr = data['r_tr']
+        r_tf = data['r_tf']
+
+        g_amp = data['r_amp'] + data['g_scale_a']
+        g_beta = data['r_beta'] * 10. ** data['g_scale_b']
+        g_gamma = data['r_gamma'] + data['g_scale_g']
+        g_tr = data['r_tr'] * 10. ** data['g_scale_tr']
+        g_tf = data['r_tf'] * 10. ** data['g_scale_tf']
+
+        i_amp = data['r_amp'] + data['i_scale_a']
+        i_beta = data['r_beta'] * 10. ** data['i_scale_b']
+        i_gamma = data['r_gamma'] + data['i_scale_g']
+        i_tr = data['r_tr'] * 10. ** data['i_scale_tr']
+        i_tf = data['r_tf'] * 10. ** data['i_scale_tf']
+
+        z_amp = i_amp + data['z_scale_a']
+        z_beta = i_beta * 10. ** data['z_scale_b']
+        z_gamma = i_gamma + data['z_scale_g']
+        z_tr = i_tr * 10. ** data['z_scale_tr']
+        z_tf = i_tf * 10. ** data['z_scale_tf']
+
+    xs = np.linspace(55827.5 - 75, 55827.5 + 250, 10000)
+    distance = Distance(z=0.042, unit='pc')
+
+    plt.scatter(xr, convert_flux(yr) - 5 * (np.log10(distance.value) - 1), color='r')
+    plt.scatter(xg, convert_flux(yg) - 5 * (np.log10(distance.value) - 1), color='g')
+    plt.scatter(xi, convert_flux(yi) - 5 * (np.log10(distance.value) - 1), color='b')
+    plt.scatter(xz, convert_flux(yz) - 5 * (np.log10(distance.value) - 1), color='y')
+
+    vectorized_sanders = np.vectorize(sanders, otypes=[float])
+    plt.plot(xs, convert_lum(vectorized_sanders(xs, 55827.5, -1.0, -2.3, -3.9, -3.0, -4.6, 1.0, 8.0, 76.0, 10.0, 0.76)),
+             color='r')
+    plt.plot(xs, convert_lum(vectorized_sanders(xs, 55827.5, -1.0, -2.1, -3.2, -3.0, -5.0, 1.0, 5.0, 78., 10., 0.81)),
+             color='g')
+    plt.plot(xs, convert_lum(vectorized_sanders(xs, 55827.5, -1.0, -3.3, -3.8, -3.0, -4.4, 1.0, 13.0, 74.0, 10., 0.76)),
+             color='b')
+    plt.plot(xs, convert_lum(vectorized_sanders(xs, 55827.5, -1.0, -3.7, -4.3, -3.1, -4.4, 1.0, 19.0, 71.0, 9.0, 0.4)),
+             color='y')
+
+    for i in range(30):
+        plt.plot(xs, convert_flux(
+            flux_equation(xs, 10. ** r_amp[0][i], r_beta[0][i], 10. ** r_gamma[0][i], r_t0[0][i], r_tr[0][i],
+                          r_tf[0][i])) - 5 * (np.log10(distance.value) - 1), color='r', alpha=0.1)
+        plt.plot(xs, convert_flux(
+            flux_equation(xs, 10. ** g_amp[0][i], g_beta[0][i], 10. ** g_gamma[0][i], r_t0[0][i], g_tr[0][i],
+                          g_tf[0][i])) - 5 * (np.log10(distance.value) - 1), color='g', alpha=0.1)
+        plt.plot(xs, convert_flux(
+            flux_equation(xs, 10. ** i_amp[0][i], i_beta[0][i], 10. ** i_gamma[0][i], r_t0[0][i], i_tr[0][i],
+                          i_tf[0][i])) - 5 * (np.log10(distance.value) - 1), color='b', alpha=0.1)
+        plt.plot(xs, convert_flux(
+            flux_equation(xs, 10. ** z_amp[0][i], z_beta[0][i], 10. ** z_gamma[0][i], r_t0[0][i], z_tr[0][i],
+                          z_tf[0][i])) - 5 * (np.log10(distance.value) - 1), color='y', alpha=0.1)
+    plt.gca().invert_yaxis()
+    plt.xlim(55800, 56100)
+    plt.ylim(-10, -17.5)
+    plt.show()
+
+    # Plot second largest difference SN's (PS1-11jg, g-band)
+    file_name = 'PS1_PS1MD_PSc130816.snana.dat'
+    xg, yg, yerr_g = read_data('g', filename=file_name)
+
+    with np.load('PSc130816.npz') as data:
+        g_amp = data['r_amp'] + data['g_scale_a']
+        g_beta = data['r_beta'] * 10. ** data['g_scale_b']
+        g_gamma = data['r_gamma'] + data['g_scale_g']
+        t0 = data['t0']
+        g_tr = data['r_tr'] * 10. ** data['g_scale_tr']
+        g_tf = data['r_tf'] * 10. ** data['g_scale_tf']
+
+    xs = np.linspace(55497.5 - 75, 55497.5 + 250, 10000)
+    distance = Distance(z=0.042, unit='pc')
+
+    plt.scatter(xg, convert_flux(yg) - 5 * (np.log10(distance.value) - 1), color='g')
+    vectorized_sanders = np.vectorize(sanders, otypes=[float])
+    plt.plot(xs, convert_lum(vectorized_sanders(xs, 55497.5, -1.0, -2.1, -3.4, -3.0, -5.0, 1.0, 5.0, 101., 10., 1.00)),
+             color='g')
+    for i in range(30):
+        plt.plot(xs, convert_flux(
+            flux_equation(xs, 10. ** g_amp[0][i], g_beta[0][i], 10. ** g_gamma[0][i], t0[0][i], g_tr[0][i],
+                          g_tf[0][i])) - 5 * (np.log10(distance.value) - 1), color='g', alpha=0.1)
+    plt.gca().invert_yaxis()
+    plt.ylim(-10, -18)
+    plt.show()
+
+
