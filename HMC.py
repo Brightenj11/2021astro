@@ -63,7 +63,11 @@ def model(x1, x2, x3, x4, y1=None, y2=None, y3=None, y4=None, yerr1=None, yerr2=
     t0 = numpyro.sample('t0', dist.Uniform(time_max - 50., time_max + 300.))  # Reference Epoch
     r_tr = numpyro.sample('r_tr', dist.Uniform(0.01, 50.))  # Rise Time
     r_tf = numpyro.sample('r_tf', dist.Uniform(1., 300.))  # Fall time
-    r_sn = numpyro.sample('r_sn', dist.HalfNormal(jnp.std(yerr1)))  # Intrinsic Scatter
+
+    if len(yerr1) == 1:
+        r_sn = numpyro.sample('r_sn', dist.HalfNormal(yerr1 / 10))  # Intrinsic Scatter if stdev fails
+    else:
+        r_sn = numpyro.sample('r_sn', dist.HalfNormal(jnp.std(yerr1)))
 
     # Sample G band
     # Limit amplitude scaling to 2
@@ -73,8 +77,11 @@ def model(x1, x2, x3, x4, y1=None, y2=None, y3=None, y4=None, yerr1=None, yerr2=
     g_scale_g = numpyro.sample('g_scale_g', dist.Normal(0., 0.25))
     g_scale_tr = numpyro.sample('g_scale_tr', dist.Normal(0., 0.25))
     g_scale_tf = numpyro.sample('g_scale_tf', dist.Normal(0., 0.25))
-    g_sn = numpyro.sample('g_sn', dist.HalfNormal(jnp.std(yerr2)))
 
+    if len(yerr2) == 1:
+        g_sn = numpyro.sample('g_sn', dist.HalfNormal(yerr2 / 10))
+    else:
+        g_sn = numpyro.sample('g_sn', dist.HalfNormal(jnp.std(yerr2)))
     # Scale G band
     g_amp = r_amp + g_scale_a
     g_beta = r_beta * 10. ** g_scale_b
@@ -89,8 +96,11 @@ def model(x1, x2, x3, x4, y1=None, y2=None, y3=None, y4=None, yerr1=None, yerr2=
     i_scale_g = numpyro.sample('i_scale_g', dist.Normal(0., 0.25))
     i_scale_tr = numpyro.sample('i_scale_tr', dist.Normal(0., 0.25))
     i_scale_tf = numpyro.sample('i_scale_tf', dist.Normal(0., 0.25))
-    i_sn = numpyro.sample('i_sn', dist.HalfNormal(jnp.std(yerr3)))
 
+    if len(yerr3) == 1:
+        i_sn = numpyro.sample('i_sn', dist.HalfNormal(yerr3 / 10))
+    else:
+        i_sn = numpyro.sample('i_sn', dist.HalfNormal(jnp.std(yerr3)))
     i_amp = r_amp + i_scale_a
     i_beta = r_beta * 10. ** i_scale_b
     i_gamma = r_gamma + i_scale_g
@@ -104,8 +114,11 @@ def model(x1, x2, x3, x4, y1=None, y2=None, y3=None, y4=None, yerr1=None, yerr2=
     z_scale_g = numpyro.sample('z_scale_g', dist.Normal(0., 0.25))
     z_scale_tr = numpyro.sample('z_scale_tr', dist.Normal(0., 0.25))
     z_scale_tf = numpyro.sample('z_scale_tf', dist.Normal(0., 0.25))
-    z_sn = numpyro.sample('z_sn', dist.HalfNormal(jnp.std(yerr4)))
 
+    if len(yerr4) == 1:
+        z_sn = numpyro.sample('z_sn', dist.HalfNormal(yerr4 / 10))
+    else:
+        z_sn = numpyro.sample('z_sn', dist.HalfNormal(jnp.std(yerr4)))
     z_amp = i_amp + z_scale_a
     z_beta = i_beta * 10. ** z_scale_b
     z_gamma = i_gamma + z_scale_g
@@ -141,13 +154,12 @@ if __name__ == '__main__':
     xg, yg, yerr_g = read_data('g', filename=file_name)
     xi, yi, yerr_i = read_data('i', filename=file_name)
     xz, yz, yerr_z = read_data('z', filename=file_name)
-
+    print(yerr_r, yerr_g, yerr_i, yerr_z)
     # Run NUTS
     rng_key = random.PRNGKey(0)
     rng_key, rng_key_ = random.split(rng_key)
     kernel = NUTS(model)
-
-    mcmc = MCMC(kernel, num_warmup=700000, num_samples=10000, thinning=1, num_chains=1)
+    mcmc = MCMC(kernel, num_warmup=70000, num_samples=10000, thinning=1, num_chains=1)
     mcmc.run(rng_key_, x1=xr, x2=xg, x3=xi, x4=xz, y1=yr, y2=yg, y3=yi, y4=yz, yerr1=yerr_r, yerr2=yerr_g, yerr3=yerr_i,
              yerr4=yerr_z, fobs_max=np.max(yr), time_max=xr[np.argmax(yr)])
     mcmc.print_summary()
@@ -193,7 +205,7 @@ if __name__ == '__main__':
         # Predict random samples
         rng_key, rng_key_ = random.split(rng_key)
 
-        t = np.linspace(np.min(xr), np.max(xr), 3000)
+        t = np.linspace(np.min(xr) - 100, np.max(xr) + 100, 3000)
         predictive = Predictive(model, posterior_samples=samples)
         predictions = predictive(rng_key_, x1=t, x2=t, x3=t, x4=t, yerr1=yerr_r, yerr2=yerr_g, yerr3=yerr_i,
                                  yerr4=yerr_z, fobs_max=np.max(yr), time_max=xr[np.argmax(yr)])
