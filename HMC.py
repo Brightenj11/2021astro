@@ -159,7 +159,7 @@ if __name__ == '__main__':
     rng_key = random.PRNGKey(0)
     rng_key, rng_key_ = random.split(rng_key)
     kernel = NUTS(model)
-    mcmc = MCMC(kernel, num_warmup=70000, num_samples=10000, thinning=1, num_chains=1)
+    mcmc = MCMC(kernel, num_warmup=90000, num_samples=10000, thinning=1, num_chains=1)
     mcmc.run(rng_key_, x1=xr, x2=xg, x3=xi, x4=xz, y1=yr, y2=yg, y3=yi, y4=yz, yerr1=yerr_r, yerr2=yerr_g, yerr3=yerr_i,
              yerr4=yerr_z, fobs_max=np.max(yr), time_max=xr[np.argmax(yr)])
     mcmc.print_summary()
