@@ -115,10 +115,6 @@ def sanders(t, t0, log_a, log_b1, log_b2, log_bdn, log_bdc, t1, tp, t2, td, m_p)
     m_2 = m_p / np.exp(b2 * t2)
     m_d = m_2 / np.exp(bdn * td)
 
-    # print('rise value (first)', -np.exp(-0.921034/a) * (-np.exp(0.921034 / a) * t0 - np.exp((b1 * tp) / a) * t1))
-    # print('rise value (second)', -(-b1 * tp - b1 * t0 - b1 * t1 + 0.921034) / b1)
-    # print('decline value', -(-b2 * tp -b2 * t0 - b2 * t1 - 0.921034) / b2)
-    # print(t0, t0+t1, t0+t1+tp, t0+t1+tp+t2, t0+t1+tp+t2+td)
     if t < t0:
         return 0.0
     elif t < t0 + t1:
@@ -405,7 +401,7 @@ def save_model_params(plot=False):
             band.extend(('r', 'g', 'i', 'z'))
             peak_height.extend((peak_r, peak_g, peak_i, peak_z))
 
-            # Slopes for all banes
+            # Slopes for all bands
             plateau_slope.append(xs[np.argmin(magnitude_r) + np.argmin(
                 np.abs(magnitude_r[np.nonzero(xs > time_max_r)] - (peak_r + 1)))]
                                  - time_max_r)
@@ -535,8 +531,7 @@ def save_sanders_params():
                               'sanders_plateau_slope': sanders_plateau_slope})
     output_df.to_csv('sanders.dat')
 
-
-if __name__ == '__main__':
+def compare_model_to_sanders():
     # Load statistics
     sanders_data = np.genfromtxt('sanders.dat', dtype=None, usecols=(1, 2, 3), skip_header=1, encoding='utf-8',
                                  delimiter=',')
@@ -620,8 +615,15 @@ if __name__ == '__main__':
             flux_equation(xs, 10. ** z_amp[0][i], z_beta[0][i], 10. ** z_gamma[0][i], r_t0[0][i], z_tr[0][i],
                           z_tf[0][i])) - 5 * (np.log10(distance.value) - 1), color='y', alpha=0.1)
     plt.gca().invert_yaxis()
-    plt.xlim(55800, 56100)
-    plt.ylim(-10, -17.5)
+    # plt.xlim(55800, 56100)
+    # plt.ylim(-10, -17.5)
+    plt.show()
+
+    plt.scatter(xr, convert_flux(yr) - 5 * (np.log10(distance.value) - 1), color='r')
+    plt.scatter(xg, convert_flux(yg) - 5 * (np.log10(distance.value) - 1), color='g')
+    plt.scatter(xi, convert_flux(yi) - 5 * (np.log10(distance.value) - 1), color='b')
+    plt.scatter(xz, convert_flux(yz) - 5 * (np.log10(distance.value) - 1), color='y')
+    plt.gca().invert_yaxis()
     plt.show()
 
     # Plot second largest difference SN's (PS1-11jg, g-band)
@@ -652,3 +654,42 @@ if __name__ == '__main__':
     plt.show()
 
 
+def figure_10(file_name='PS1_PS1MD_PSc350330.snana.dat'):
+    xr, yr, yerr_r = read_data('r', filename=file_name)
+    xg, yg, yerr_g = read_data('g', filename=file_name)
+    xi, yi, yerr_i = read_data('i', filename=file_name)
+    xz, yz, yerr_z = read_data('z', filename=file_name)
+
+    with np.load('PSc350330.npz') as data:
+        r_amp = data['r_amp']
+        r_beta = data['r_beta']
+        r_gamma = data['r_gamma']
+        r_t0 = data['t0']
+        r_tr = data['r_tr']
+        r_tf = data['r_tf']
+
+        g_amp = data['r_amp'] + data['g_scale_a']
+        g_beta = data['r_beta'] * 10. ** data['g_scale_b']
+        g_gamma = data['r_gamma'] + data['g_scale_g']
+        g_tr = data['r_tr'] * 10. ** data['g_scale_tr']
+        g_tf = data['r_tf'] * 10. ** data['g_scale_tf']
+
+        i_amp = data['r_amp'] + data['i_scale_a']
+        i_beta = data['r_beta'] * 10. ** data['i_scale_b']
+        i_gamma = data['r_gamma'] + data['i_scale_g']
+        i_tr = data['r_tr'] * 10. ** data['i_scale_tr']
+        i_tf = data['r_tf'] * 10. ** data['i_scale_tf']
+
+        z_amp = i_amp + data['z_scale_a']
+        z_beta = i_beta * 10. ** data['z_scale_b']
+        z_gamma = i_gamma + data['z_scale_g']
+        z_tr = i_tr * 10. ** data['z_scale_tr']
+        z_tf = i_tf * 10. ** data['z_scale_tf']
+
+    plt.scatter(xr, convert_flux(yr) - 5 * (np.log10(distance.value) - 1), color='r')
+    plt.scatter(xg, convert_flux(yg) - 5 * (np.log10(distance.value) - 1), color='g')
+    plt.scatter(xi, convert_flux(yi) - 5 * (np.log10(distance.value) - 1), color='b')
+    plt.scatter(xz, convert_flux(yz) - 5 * (np.log10(distance.value) - 1), color='y')
+
+if __name__ == '__main__':
+    figure_10()
