@@ -23,7 +23,7 @@ def read_data(filter_name, filename: str = 'PS1_PS1MD_PSc370330.snana.dat'):
 
     for entree in data:
         if entree[1] == filter_name:
-            if entree[2] / entree[3] > 3.:
+            if entree[2] / entree[3] > 3. and entree[2] < 1000:
                 x.append(entree[0])
                 y.append(entree[2])
                 yerr.append(entree[3])
@@ -278,7 +278,7 @@ def mcmc(x, y, yerr, x2, y2, yerr2, x3, y3, yerr3, x4, y4, yerr4):
     plt.show()
 
 
-def convert_flux(flux_arr):
+def convert_flux_to_magnitude(flux_arr):
     return -2.5 * np.log10(flux_arr) + 27.5
 
 
@@ -335,10 +335,10 @@ def save_model_params(plot=False):
             distance = Distance(z=redshift_list[SN], unit='pc')
 
             # Find distance modulus
-            yr = convert_flux(yr) - 5 * (np.log10(distance.value) - 1)
-            yg = convert_flux(yg) - 5 * (np.log10(distance.value) - 1)
-            yi = convert_flux(yi) - 5 * (np.log10(distance.value) - 1)
-            yz = convert_flux(yz) - 5 * (np.log10(distance.value) - 1)
+            yr = convert_flux_to_magnitude(yr) - 5 * (np.log10(distance.value) - 1)
+            yg = convert_flux_to_magnitude(yg) - 5 * (np.log10(distance.value) - 1)
+            yi = convert_flux_to_magnitude(yi) - 5 * (np.log10(distance.value) - 1)
+            yz = convert_flux_to_magnitude(yz) - 5 * (np.log10(distance.value) - 1)
 
             # Load Variables
             with np.load(number + '.npz') as data:
@@ -371,16 +371,16 @@ def save_model_params(plot=False):
             xs = np.linspace(t0_list[SN] - 500, t0_list[SN] + 500, 10000)
 
             # Get y magnitudes for one fit
-            magnitude_r = convert_flux(flux_equation(xs, 10. ** r_amp[0][0], r_beta[0][0], 10. ** r_gamma[0][0],
+            magnitude_r = convert_flux_to_magnitude(flux_equation(xs, 10. ** r_amp[0][0], r_beta[0][0], 10. ** r_gamma[0][0],
                                                      r_t0[0][0], r_tr[0][0], r_tf[0][0])) - 5 * (
                                       np.log10(distance.value) - 1)
-            magnitude_g = convert_flux(flux_equation(xs, 10. ** g_amp[0][0], g_beta[0][0], 10. ** g_gamma[0][0],
+            magnitude_g = convert_flux_to_magnitude(flux_equation(xs, 10. ** g_amp[0][0], g_beta[0][0], 10. ** g_gamma[0][0],
                                                      r_t0[0][0], g_tr[0][0], g_tf[0][0])) - 5 * (
                                       np.log10(distance.value) - 1)
-            magnitude_i = convert_flux(flux_equation(xs, 10. ** i_amp[0][0], i_beta[0][0], 10. ** i_gamma[0][0],
+            magnitude_i = convert_flux_to_magnitude(flux_equation(xs, 10. ** i_amp[0][0], i_beta[0][0], 10. ** i_gamma[0][0],
                                                      r_t0[0][0], i_tr[0][0], i_tf[0][0])) - 5 * (
                                       np.log10(distance.value) - 1)
-            magnitude_z = convert_flux(flux_equation(xs, 10. ** z_amp[0][0], z_beta[0][0], 10. ** z_gamma[0][0],
+            magnitude_z = convert_flux_to_magnitude(flux_equation(xs, 10. ** z_amp[0][0], z_beta[0][0], 10. ** z_gamma[0][0],
                                                      r_t0[0][0], z_tr[0][0], z_tf[0][0])) - 5 * (
                                       np.log10(distance.value) - 1)
 
@@ -427,16 +427,16 @@ def save_model_params(plot=False):
                 # X_temp used to set plot limits
                 x_temp = np.linspace(t0_list[SN] - 5, t0_list[SN] + 5)
                 ys = np.concatenate(
-                    (convert_flux(flux_equation(x_temp, 10. ** r_amp[0][0], r_beta[0][0], 10. ** r_gamma[0][0],
+                    (convert_flux_to_magnitude(flux_equation(x_temp, 10. ** r_amp[0][0], r_beta[0][0], 10. ** r_gamma[0][0],
                                                 r_t0[0][0], r_tr[0][0], r_tf[0][0])) - 5 * (
                              np.log10(distance.value) - 1),
-                     convert_flux(flux_equation(x_temp, 10. ** g_amp[0][0], g_beta[0][0], 10. ** g_gamma[0][0],
+                     convert_flux_to_magnitude(flux_equation(x_temp, 10. ** g_amp[0][0], g_beta[0][0], 10. ** g_gamma[0][0],
                                                 r_t0[0][0], g_tr[0][0], g_tf[0][0])) - 5 * (
                              np.log10(distance.value) - 1),
-                     convert_flux(flux_equation(x_temp, 10. ** i_amp[0][0], i_beta[0][0], 10. ** i_gamma[0][0],
+                     convert_flux_to_magnitude(flux_equation(x_temp, 10. ** i_amp[0][0], i_beta[0][0], 10. ** i_gamma[0][0],
                                                 r_t0[0][0], i_tr[0][0], i_tf[0][0])) - 5 * (
                              np.log10(distance.value) - 1),
-                     convert_flux(flux_equation(x_temp, 10. ** z_amp[0][0], z_beta[0][0], 10. ** z_gamma[0][0],
+                     convert_flux_to_magnitude(flux_equation(x_temp, 10. ** z_amp[0][0], z_beta[0][0], 10. ** z_gamma[0][0],
                                                 r_t0[0][0], z_tr[0][0], z_tf[0][0])) - 5 * (
                              np.log10(distance.value) - 1)))
 
@@ -451,19 +451,19 @@ def save_model_params(plot=False):
 
                 # Plot fits
                 for i in range(0, 25):
-                    plt.plot(xs, convert_flux(
+                    plt.plot(xs, convert_flux_to_magnitude(
                         flux_equation(xs, 10. ** r_amp[0][i], r_beta[0][i], 10. ** r_gamma[0][i], r_t0[0][i],
                                       r_tr[0][i], r_tf[0][i])) - 5 * (np.log10(distance.value) - 1), color='r',
                              alpha=0.1)
-                    plt.plot(xs, convert_flux(
+                    plt.plot(xs, convert_flux_to_magnitude(
                         flux_equation(xs, 10. ** g_amp[0][i], g_beta[0][i], 10. ** g_gamma[0][i], r_t0[0][i],
                                       g_tr[0][i], g_tf[0][i])) - 5 * (np.log10(distance.value) - 1), color='g',
                              alpha=0.1)
-                    plt.plot(xs, convert_flux(
+                    plt.plot(xs, convert_flux_to_magnitude(
                         flux_equation(xs, 10. ** i_amp[0][i], i_beta[0][i], 10. ** i_gamma[0][i], r_t0[0][i],
                                       i_tr[0][i], i_tf[0][i])) - 5 * (np.log10(distance.value) - 1), color='b',
                              alpha=0.1)
-                    plt.plot(xs, convert_flux(
+                    plt.plot(xs, convert_flux_to_magnitude(
                         flux_equation(xs, 10. ** z_amp[0][i], z_beta[0][i], 10. ** z_gamma[0][i], r_t0[0][i],
                                       z_tr[0][i], z_tf[0][i])) - 5 * (np.log10(distance.value) - 1), color='b',
                              alpha=0.1)
@@ -586,10 +586,10 @@ def compare_model_to_sanders():
     xs = np.linspace(55827.5 - 75, 55827.5 + 250, 10000)
     distance = Distance(z=0.042, unit='pc')
 
-    plt.scatter(xr, convert_flux(yr) - 5 * (np.log10(distance.value) - 1), color='r')
-    plt.scatter(xg, convert_flux(yg) - 5 * (np.log10(distance.value) - 1), color='g')
-    plt.scatter(xi, convert_flux(yi) - 5 * (np.log10(distance.value) - 1), color='b')
-    plt.scatter(xz, convert_flux(yz) - 5 * (np.log10(distance.value) - 1), color='y')
+    plt.scatter(xr, convert_flux_to_magnitude(yr) - 5 * (np.log10(distance.value) - 1), color='r')
+    plt.scatter(xg, convert_flux_to_magnitude(yg) - 5 * (np.log10(distance.value) - 1), color='g')
+    plt.scatter(xi, convert_flux_to_magnitude(yi) - 5 * (np.log10(distance.value) - 1), color='b')
+    plt.scatter(xz, convert_flux_to_magnitude(yz) - 5 * (np.log10(distance.value) - 1), color='y')
 
     vectorized_sanders = np.vectorize(sanders, otypes=[float])
     plt.plot(xs, convert_lum(vectorized_sanders(xs, 55827.5, -1.0, -2.3, -3.9, -3.0, -4.6, 1.0, 8.0, 76.0, 10.0, 0.76)),
@@ -602,16 +602,16 @@ def compare_model_to_sanders():
              color='y')
 
     for i in range(30):
-        plt.plot(xs, convert_flux(
+        plt.plot(xs, convert_flux_to_magnitude(
             flux_equation(xs, 10. ** r_amp[0][i], r_beta[0][i], 10. ** r_gamma[0][i], r_t0[0][i], r_tr[0][i],
                           r_tf[0][i])) - 5 * (np.log10(distance.value) - 1), color='r', alpha=0.1)
-        plt.plot(xs, convert_flux(
+        plt.plot(xs, convert_flux_to_magnitude(
             flux_equation(xs, 10. ** g_amp[0][i], g_beta[0][i], 10. ** g_gamma[0][i], r_t0[0][i], g_tr[0][i],
                           g_tf[0][i])) - 5 * (np.log10(distance.value) - 1), color='g', alpha=0.1)
-        plt.plot(xs, convert_flux(
+        plt.plot(xs, convert_flux_to_magnitude(
             flux_equation(xs, 10. ** i_amp[0][i], i_beta[0][i], 10. ** i_gamma[0][i], r_t0[0][i], i_tr[0][i],
                           i_tf[0][i])) - 5 * (np.log10(distance.value) - 1), color='b', alpha=0.1)
-        plt.plot(xs, convert_flux(
+        plt.plot(xs, convert_flux_to_magnitude(
             flux_equation(xs, 10. ** z_amp[0][i], z_beta[0][i], 10. ** z_gamma[0][i], r_t0[0][i], z_tr[0][i],
                           z_tf[0][i])) - 5 * (np.log10(distance.value) - 1), color='y', alpha=0.1)
     plt.gca().invert_yaxis()
@@ -619,10 +619,10 @@ def compare_model_to_sanders():
     # plt.ylim(-10, -17.5)
     plt.show()
 
-    plt.scatter(xr, convert_flux(yr) - 5 * (np.log10(distance.value) - 1), color='r')
-    plt.scatter(xg, convert_flux(yg) - 5 * (np.log10(distance.value) - 1), color='g')
-    plt.scatter(xi, convert_flux(yi) - 5 * (np.log10(distance.value) - 1), color='b')
-    plt.scatter(xz, convert_flux(yz) - 5 * (np.log10(distance.value) - 1), color='y')
+    plt.scatter(xr, convert_flux_to_magnitude(yr) - 5 * (np.log10(distance.value) - 1), color='r')
+    plt.scatter(xg, convert_flux_to_magnitude(yg) - 5 * (np.log10(distance.value) - 1), color='g')
+    plt.scatter(xi, convert_flux_to_magnitude(yi) - 5 * (np.log10(distance.value) - 1), color='b')
+    plt.scatter(xz, convert_flux_to_magnitude(yz) - 5 * (np.log10(distance.value) - 1), color='y')
     plt.gca().invert_yaxis()
     plt.show()
 
@@ -641,12 +641,12 @@ def compare_model_to_sanders():
     xs = np.linspace(55497.5 - 75, 55497.5 + 250, 10000)
     distance = Distance(z=0.042, unit='pc')
 
-    plt.scatter(xg, convert_flux(yg) - 5 * (np.log10(distance.value) - 1), color='g')
+    plt.scatter(xg, convert_flux_to_magnitude(yg) - 5 * (np.log10(distance.value) - 1), color='g')
     vectorized_sanders = np.vectorize(sanders, otypes=[float])
     plt.plot(xs, convert_lum(vectorized_sanders(xs, 55497.5, -1.0, -2.1, -3.4, -3.0, -5.0, 1.0, 5.0, 101., 10., 1.00)),
              color='g')
     for i in range(30):
-        plt.plot(xs, convert_flux(
+        plt.plot(xs, convert_flux_to_magnitude(
             flux_equation(xs, 10. ** g_amp[0][i], g_beta[0][i], 10. ** g_gamma[0][i], t0[0][i], g_tr[0][i],
                           g_tf[0][i])) - 5 * (np.log10(distance.value) - 1), color='g', alpha=0.1)
     plt.gca().invert_yaxis()
@@ -654,13 +654,9 @@ def compare_model_to_sanders():
     plt.show()
 
 
-def figure_10(file_name='PS1_PS1MD_PSc350330.snana.dat'):
-    xr, yr, yerr_r = read_data('r', filename=file_name)
-    xg, yg, yerr_g = read_data('g', filename=file_name)
-    xi, yi, yerr_i = read_data('i', filename=file_name)
-    xz, yz, yerr_z = read_data('z', filename=file_name)
-
-    with np.load('PSc350330.npz') as data:
+def figure_10():
+    '''
+    with np.load(os.getcwd() + '/flux_' + file_name + '.npz') as data:
         r_amp = data['r_amp']
         r_beta = data['r_beta']
         r_gamma = data['r_gamma']
@@ -686,10 +682,114 @@ def figure_10(file_name='PS1_PS1MD_PSc350330.snana.dat'):
         z_tr = i_tr * 10. ** data['z_scale_tr']
         z_tf = i_tf * 10. ** data['z_scale_tf']
 
-    plt.scatter(xr, convert_flux(yr) - 5 * (np.log10(distance.value) - 1), color='r')
-    plt.scatter(xg, convert_flux(yg) - 5 * (np.log10(distance.value) - 1), color='g')
-    plt.scatter(xi, convert_flux(yi) - 5 * (np.log10(distance.value) - 1), color='b')
-    plt.scatter(xz, convert_flux(yz) - 5 * (np.log10(distance.value) - 1), color='y')
+        flux_r = data['flux_eq_r']
+        flux_g = data['flux_eq_g']
+        flux_i = data['flux_eq_i']
+        flux_g = data['flux_eq_z']
+    '''
+    # distance = Distance(z=redshift_list[SN], unit='pc')
+    SNII_list = np.genfromtxt('SNII.dat', dtype=None, usecols=1, skip_header=1, delimiter=',', encoding='utf-8')
+
+    all_flux_r = list()
+    all_flux_g = list()
+    all_flux_i = list()
+    all_flux_z = list()
+    fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
+    for SN_name in SNII_list:
+        data_name = 'PS1_PS1MD_' + SN_name + '.snana.dat'
+        xr, yr, yerr_r = read_data('r', filename=data_name)
+        xg, yg, yerr_g = read_data('g', filename=data_name)
+        xi, yi, yerr_i = read_data('i', filename=data_name)
+        xz, yz, yerr_z = read_data('z', filename=data_name)
+
+
+        with np.load(os.getcwd() + '/SNII_fits/flux_' + SN_name + '.npz') as data:
+            flux_r = data['flux_eq_r'] # [:, 25:75]
+            # flux_g = data['flux_eq_g'][:, 25:75]
+            # flux_i = data['flux_eq_i'][:, 25:75]
+            # flux_z = data['flux_eq_z'][:, 25:75]
+
+        max_r = np.amax(flux_r)
+        # xr = xr - xr[0]
+        ax1.errorbar(xr, yr, yerr_r, marker='o', color='0.4', markerfacecolor='r',
+                     markeredgecolor='r', markersize=3, linewidth=0.2, zorder=2)
+        # ax1.plot(xr, convert_flux_to_magnitude(yr), color='r', marker='o')
+
+        # plt.errorbar(xg, yg, yerr_g, marker='o', color='g')
+        # plt.errorbar(xi, yi, yerr_i, marker='o', color='b')
+        # plt.errorbar(xz, yz, yerr_z, marker='o', color='y')
+
+        all_flux_r.append(flux_r)
+        # all_flux_g.append(flux_g)
+        # all_flux_i.append(flux_i)
+        # all_flux_z.append(flux_z)
+    # ax1.set_ylim(-2, 5)
+    plt.gca().invert_yaxis()
+    # plt.show()
+
+    # data_name = 'PS1_PS1MD_' + 'PSc000015' + '.snana.dat'
+    # xr, yr, yerr_r = read_data('r', filename=data_name)
+    # xg, yg, yerr_g = read_data('g', filename=data_name)
+    # xi, yi, yerr_i = read_data('i', filename=data_name)
+    # xz, yz, yerr_z = read_data('z', filename=data_name)
+    # xs = np.concatenate((xr, xg, xi, xz))
+
+    #t = np.linspace(np.min(xs) - 100, np.max(xs) + 100, 200)
+
+    t = np.linspace(0, 200, 200)
+    '''
+    for i in range(10):
+        for j in range(20):
+            plt.plot(t, all_flux_r[i][j], color='r', alpha=0.1)
+    plt.show()
+
+    for i in range(50):
+        plt.plot(t, all_flux_g[0][i], color='g', alpha=0.1)
+    plt.show()
+
+    for i in range(50):
+        plt.plot(t, all_flux_i[0][i], color='b', alpha=0.1)
+    plt.show()
+
+    for i in range(50):
+        plt.plot(t, all_flux_z[0][i], color='y', alpha=0.1)
+    plt.show()
+    '''
+
+    ax2.plot(t, np.median(all_flux_r, axis=(0, 1)), color='r')
+    ax2.plot(t, np.percentile(all_flux_r, 16, axis=(0, 1)), alpha=0.5, color='r')
+    ax2.plot(t, np.percentile(all_flux_r, 84, axis=(0, 1)), alpha=0.5, color='r')
+    ax1.set_xlabel('time')
+    ax1.set_ylabel('flux')
+    fig.savefig('r.png', dpi=300)
+    plt.show()
+
+    '''
+    with np.load(os.getcwd() + '/' + file_name + '.npz') as data:
+        test = data['flux_eq_r']
+
+    print(test, test.shape)
+    plt.errorbar(xr, yr, yerr_r, marker='o', color='r')
+
+    n_samples = 100
+    print(test[0].shape)
+    t = np.linspace(np.min(xr) - 100, np.max(xr) + 100, 3000)
+    for i in range(n_samples):
+        plt.plot(t, test[i], color='r', alpha=0.1)
+
+    plt.plot(t, np.median(test, axis=0))
+    plt.plot(t, np.percentile(test, 75, axis=0))
+    plt.show()
+    '''
+    ''' 
+    plt.plot(xr, yr, 'o')
+    for i in range(1):
+        plt.plot(xr, (flux_equation(xr, 10. ** r_amp[0][i], r_beta[0][i], 10. ** r_gamma[0][i],
+                                    r_t0[0][i], r_tr[0][i], r_tf[0][i])))
+    plt.show()
+    print((flux_equation(xr, 10. ** r_amp[0][0], r_beta[0][0], 10. ** r_gamma[0][0],
+                         r_t0[0][0], r_tr[0][0], r_tf[0][0]).shape))
+    '''
 
 if __name__ == '__main__':
     figure_10()
